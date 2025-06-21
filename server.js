@@ -23,6 +23,70 @@ function applyColorCodes(text) {
     '%e': '#FFFF55',
     '%f': '#FFFFFF'
   };
+const joinMessages = [
+  'A wild % appeared!',
+  '% has joined the fray!',
+  'Everyone, say hi to %!',
+  '% teleported in!',
+  '% just slid into the room!',
+  '% came out of nowhere!',
+  'Boom! % is here!',
+  '% joined the chaos!',
+  'Welcome % – better late than never!',
+  '% is online. Things just got serious.',
+  '% fell from the sky!',
+  '% has entered the chat.',
+  'Make some noise! % just showed up!',
+  '% materialized.',
+  '% joined with style!',
+  '% is watching you 👀',
+  '% spawned in.',
+  '% just arrived from another dimension.',
+  '% popped in uninvited!',
+  '% appeared like magic!',
+  'Brace yourselves – % has entered!',
+  '% was summoned.',
+  'Incoming player: %!',
+  'Ping! % joined.',
+  'It’s a bird! It’s a plane! Nope, it’s %!',
+  'System: % has loaded into reality.',
+  '% slid down the chat pipe.',
+  '% rode in on a hoverboard.',
+  'Look who’s back: %!',
+  '% spawned with a cape!'
+];
+
+const leaveMessages = [
+  'Rest In Piss %!',
+  '% vanished into thin air.',
+  '% rage quit.',
+  '% left like a ghost.',
+  '% went offline. F.',
+  'Goodbye % – gone but not forgotten!',
+  '% dipped.',
+  '% fell through the cracks.',
+  '% just rage-teleported.',
+  'Peace out %!',
+  '% went to get milk.',
+  'Another one bites the dust – % is out.',
+  '% just Alt+F4’d.',
+  'Poof! % disappeared.',
+  'Silence... % has left.',
+  '% unplugged the router.',
+  '% got snapped by Thanos.',
+  '% escaped.',
+  'Well... % left the building.',
+  '% has been yeeted.',
+  'We barely knew ya, %!',
+  '% logged off.',
+  'Farewell, %.',
+  '% melted away.',
+  '% disintegrated.',
+  'RIP %',
+  'Connection lost with %.',
+  '% rage quit (again).',
+  '% has left. Freedom at last.'
+];
 
   let currentColor = null;
 
@@ -149,7 +213,9 @@ function joinRoom(ws, roomName) {
     ws.send(JSON.stringify({ type: 'message', user: m.user, text: m.text, isHostMsg: m.user === room.host }));
   });
 
-  broadcast(roomName, { type: 'message', user: 'System', text: `${clientData.username} joined.`, isHostMsg: false });
+  const joinMsg = joinMessages[Math.floor(Math.random() * joinMessages.length)].replace('%', clientData.username);
+broadcast(roomName, { type: 'message', user: 'System', text: joinMsg, isHostMsg: false });
+
   sendRoomListUpdate();
 }
 
@@ -158,7 +224,9 @@ function leaveRoom(ws) {
   if (!clientData.currentRoom) return;
   const room = chatRooms[clientData.currentRoom];
   room.users.delete(ws);
-  broadcast(clientData.currentRoom, { type: 'message', user: 'System', text: `${clientData.username} left.`, isHostMsg: false });
+  const leaveMsg = leaveMessages[Math.floor(Math.random() * leaveMessages.length)].replace('%', clientData.username);
+broadcast(clientData.currentRoom, { type: 'message', user: 'System', text: leaveMsg, isHostMsg: false });
+
   if (room.users.size === 0) delete chatRooms[clientData.currentRoom];
   clientData.currentRoom = null;
   sendRoomListUpdate();
