@@ -4,6 +4,74 @@ const wss = new WebSocket.Server({ port });
 
 let clients = new Map(); // ws -> { username, currentRoom }
 let chatRooms = {}; // roomName -> { host, users:Set(ws), isPrivate, banned:Set(username), muted:Set(username), messages: [] }
+
+// Custom join messages — % will be replaced with the player's username
+const joinMessages = [
+  'A wild % appeared!',
+  '% has joined the fray!',
+  'Everyone, say hi to %!',
+  '% teleported in!',
+  '% just slid into the room!',
+  '% came out of nowhere!',
+  'Boom! % is here!',
+  '% joined the chaos!',
+  'Welcome % – better late than never!',
+  '% is online. Things just got serious.',
+  '% fell from the sky!',
+  '% has entered the chat.',
+  'Make some noise! % just showed up!',
+  '% materialized.',
+  '% joined with style!',
+  '% is watching you 👀',
+  '% spawned in.',
+  '% just arrived from another dimension.',
+  '% popped in uninvited!',
+  '% appeared like magic!',
+  'Brace yourselves – % has entered!',
+  '% was summoned.',
+  'Incoming player: %!',
+  'Ping! % joined.',
+  'It’s a bird! It’s a plane! Nope, it’s %!',
+  'System: % has loaded into reality.',
+  '% slid down the chat pipe.',
+  '% rode in on a hoverboard.',
+  'Look who’s back: %!',
+  '% spawned with a cape!'
+];
+
+// Custom leave messages — % will be replaced with the player's username
+const leaveMessages = [
+  'Rest In Piss %!',
+  '% vanished into thin air.',
+  '% rage quit.',
+  '% left like a ghost.',
+  '% went offline. F.',
+  'Goodbye % – gone but not forgotten!',
+  '% dipped.',
+  '% fell through the cracks.',
+  '% just rage-teleported.',
+  'Peace out %!',
+  '% went to get milk.',
+  'Another one bites the dust – % is out.',
+  '% just Alt+F4’d.',
+  'Poof! % disappeared.',
+  'Silence... % has left.',
+  '% unplugged the router.',
+  '% got snapped by Thanos.',
+  '% escaped.',
+  'Well... % left the building.',
+  '% has been yeeted.',
+  'We barely knew ya, %!',
+  '% logged off.',
+  'Farewell, %.',
+  '% melted away.',
+  '% disintegrated.',
+  'RIP %',
+  'Connection lost with %.',
+  '% rage quit (again).',
+  '% has left. Freedom at last.'
+];
+
 function applyColorCodes(text) {
   const codeMap = {
     '%0': '#000000',
@@ -149,7 +217,10 @@ function joinRoom(ws, roomName) {
     ws.send(JSON.stringify({ type: 'message', user: m.user, text: m.text, isHostMsg: m.user === room.host }));
   });
 
-  broadcast(roomName, { type: 'message', user: 'System', text: `${clientData.username} joined.`, isHostMsg: false });
+  // Use a random join message with the player's name
+  const joinMsg = joinMessages[Math.floor(Math.random() * joinMessages.length)].replace('%', clientData.username);
+  broadcast(roomName, { type: 'message', user: 'System', text: joinMsg, isHostMsg: false });
+
   sendRoomListUpdate();
 }
 
@@ -158,7 +229,11 @@ function leaveRoom(ws) {
   if (!clientData.currentRoom) return;
   const room = chatRooms[clientData.currentRoom];
   room.users.delete(ws);
-  broadcast(clientData.currentRoom, { type: 'message', user: 'System', text: `${clientData.username} left.`, isHostMsg: false });
+
+  // Use a random leave message with the player's name
+  const leaveMsg = leaveMessages[Math.floor(Math.random() * leaveMessages.length)].replace('%', clientData.username);
+  broadcast(clientData.currentRoom, { type: 'message', user: 'System', text: leaveMsg, isHostMsg: false });
+
   if (room.users.size === 0) delete chatRooms[clientData.currentRoom];
   clientData.currentRoom = null;
   sendRoomListUpdate();
@@ -178,8 +253,7 @@ function handleChatMessage(ws, roomName, text) {
   const msg = { user: clientData.username, text };
   room.messages.push(msg);
   const coloredText = applyColorCodes(text);
-broadcast(roomName, { type: 'message', user: clientData.username, text: coloredText, isHostMsg: false });
-
+  broadcast(roomName, { type: 'message', user: clientData.username, text: coloredText, isHostMsg: false });
 }
 
 function handleCommand(ws, room, text) {
@@ -204,7 +278,7 @@ function handleCommand(ws, room, text) {
       break;
     case 'kick':
       if (arg) {
-        const target = [...clients.entries()].find(([sock, data]) => data.username === arg && room.users.includes(sock));
+        const target = [...clients.entries()].find(([sock, data]) => data.username === arg && room.users.has(sock));
         if (target) {
           const [targetSock] = target;
           targetSock.send(JSON.stringify({ type: 'error', message: 'You have been kicked from the room.' }));
@@ -241,7 +315,6 @@ function handleCommand(ws, room, text) {
   ws.send(JSON.stringify({ type: 'message', user: 'System', text: feedback, isHostMsg: false }));
   sendRoomListUpdate();
 }
-
 
 function sendRoomListUpdate() {
   const publicRooms = Object.entries(chatRooms)
