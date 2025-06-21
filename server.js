@@ -6,41 +6,30 @@ let clients = new Map(); // ws -> { username, currentRoom }
 let chatRooms = {}; // roomName -> { host, users:Set(ws), isPrivate, banned:Set(username), muted:Set(username), messages: [] }
 function applyColorCodes(text) {
   const codeMap = {
-    '%0': '#000000', // black
-    '%1': '#0000AA', // dark blue
-    '%2': '#00AA00', // dark green
-    '%3': '#00AAAA', // dark cyan
-    '%4': '#AA0000', // maroon
-    '%5': '#AA00AA', // purple
-    '%6': '#FFAA00', // gold
-    '%7': '#AAAAAA', // light gray
-    '%8': '#555555', // gray
-    '%9': '#5555FF', // light blue
-    '%a': '#55FF55', // green
-    '%b': '#55FFFF', // cyan
-    '%c': '#FF5555', // red
-    '%d': '#FF55FF', // pink
-    '%e': '#FFFF55', // yellow
-    '%f': '#FFFFFF'  // white
+    '%0': '#000000',
+    '%1': '#0000AA',
+    '%2': '#00AA00',
+    '%3': '#00AAAA',
+    '%4': '#AA0000',
+    '%5': '#AA00AA',
+    '%6': '#FFAA00',
+    '%7': '#AAAAAA',
+    '%8': '#555555',
+    '%9': '#5555FF',
+    '%a': '#55FF55',
+    '%b': '#55FFFF',
+    '%c': '#FF5555',
+    '%d': '#FF55FF',
+    '%e': '#FFFF55',
+    '%f': '#FFFFFF'
   };
 
-  let result = '';
-  let segments = text.split(/(%[0-9a-f])/gi);
   let currentColor = null;
 
-  for (let segment of segments) {
-    if (codeMap[segment?.toLowerCase()]) {
-      currentColor = codeMap[segment.toLowerCase()];
-    } else if (segment) {
-      if (currentColor) {
-        result += `<span style="color:${currentColor}">${segment}</span>`;
-      } else {
-        result += segment;
-      }
-    }
-  }
-
-  return result;
+  return text.replace(/%[0-9a-f]/gi, match => {
+    currentColor = codeMap[match.toLowerCase()];
+    return `<span style="color:${currentColor}">`;
+  }) + (currentColor ? '</span>' : '');
 }
 
 function broadcast(roomName, data) {
