@@ -149,9 +149,7 @@ function joinRoom(ws, roomName) {
     ws.send(JSON.stringify({ type: 'message', user: m.user, text: m.text, isHostMsg: m.user === room.host }));
   });
 
-  const joinMsg = joinMessages[Math.floor(Math.random() * joinMessages.length)].replace('%', clientData.username);
-broadcast(roomName, { type: 'message', user: 'System', text: joinMsg, isHostMsg: false });
-
+  broadcast(roomName, { type: 'message', user: 'System', text: `${clientData.username} joined.`, isHostMsg: false });
   sendRoomListUpdate();
 }
 
@@ -160,9 +158,7 @@ function leaveRoom(ws) {
   if (!clientData.currentRoom) return;
   const room = chatRooms[clientData.currentRoom];
   room.users.delete(ws);
-  const leaveMsg = leaveMessages[Math.floor(Math.random() * leaveMessages.length)].replace('%', clientData.username);
-broadcast(clientData.currentRoom, { type: 'message', user: 'System', text: leaveMsg, isHostMsg: false });
-
+  broadcast(clientData.currentRoom, { type: 'message', user: 'System', text: `${clientData.username} left.`, isHostMsg: false });
   if (room.users.size === 0) delete chatRooms[clientData.currentRoom];
   clientData.currentRoom = null;
   sendRoomListUpdate();
