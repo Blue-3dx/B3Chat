@@ -1,0 +1,11 @@
+app = "b3chat"
+
+[build]
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 8080
