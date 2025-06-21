@@ -1,106 +1,96 @@
-// server.js
 const WebSocket = require('ws');
-const sqlite = require('sqlite3').verbose();
-const db = new sqlite.Database('users.db');
-
 const port = process.env.PORT || 8080;
 const wss = new WebSocket.Server({ port });
 
-// Initialize users table
-db.run(`
-  CREATE TABLE IF NOT EXISTS users (
-    username TEXT PRIMARY KEY,
-    password TEXT NOT NULL
-  )
-`);
+let clients = new Map(); // ws -> { username, currentRoom }
+let chatRooms = {}; // roomName -> { host, users:Set(ws), isPrivate, banned:Set(username), muted:Set(username), messages: [] }
 
-let clients = new Map();   // ws -> { username, currentRoom }
-let chatRooms = {};        // roomName -> { host, users:Set(ws), isPrivate, banned:Set, muted:Set, nicknames:Map, messages:[] }
-
-function broadcast(room, data) {
-  if (!chatRooms[room]) return;
-  chatRooms[room].users.forEach(ws => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+function broadcast(roomName, data) {
+  if (!chatRooms[roomName]) return;
+  chatRooms[roomName].users.forEach(clientWs => {
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(JSON.stringify(data));
+    }
   });
 }
 
 wss.on('connection', ws => {
   clients.set(ws, { username: null, currentRoom: null });
 
-  ws.on('message', raw => {
+  ws.on('message', message => {
     let data;
-    try { data = JSON.parse(raw); }
-    catch { return ws.send(JSON.stringify({ type:'error', message:'Invalid JSON' })); }
-
-    const client = clients.get(ws);
-
-    // --- Authentication ---
-    if (data.type === 'register') {
-      return db.get(`SELECT 1 FROM users WHERE username=?`, data.username, (_, row) => {
-        if (row) return ws.send(JSON.stringify({ type:'auth', success:false, message:'Username taken' }));
-        db.run(`INSERT INTO users(username,password) VALUES(?,?)`, data.username, data.password, err => {
-          ws.send(JSON.stringify({ type:'auth', success:!err, message: err? 'Error' : 'Registered' }));
-        });
-      });
+    try {
+      data = JSON.parse(message);
+    } catch {
+      ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
+      return;
     }
 
-    if (data.type === 'login') {
-      return db.get(`SELECT password FROM users WHERE username=?`, data.username, (_, row) => {
-        if (!row || row.password !== data.password) {
-          return ws.send(JSON.stringify({ type:'auth', success:false, message:'Username or password incorrect' }));
-        }
-        client.username = data.username;
-        ws.send(JSON.stringify({ type:'auth', success:true, message:'Logged in' }));
-      });
-    }
+    const clientData = clients.get(ws);
 
-    // Must be logged in for everything else
-    if (!client.username) {
-      return ws.send(JSON.stringify({ type:'error', message:'Login required' }));
-    }
-
-    // --- Chatroom actions ---
     switch (data.type) {
+      case 'set_username':
+        clientData.username = data.username;
+        break;
+
       case 'create_room':
+        if (!clientData.username) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Set username first' }));
+          return;
+        }
+        if (!data.roomName) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Invalid room name' }));
+          return;
+        }
         if (chatRooms[data.roomName]) {
-          return ws.send(JSON.stringify({ type:'error', message:'Room exists' }));
+          ws.send(JSON.stringify({ type: 'error', message: 'Room already exists' }));
+          return;
         }
         chatRooms[data.roomName] = {
-          host: client.username,
+          host: clientData.username,
           users: new Set(),
           isPrivate: false,
           banned: new Set(),
           muted: new Set(),
-          nicknames: new Map(),
           messages: []
         };
         joinRoom(ws, data.roomName);
-        updateRooms();
+        sendRoomListUpdate();
         break;
 
       case 'list_rooms':
-        ws.send(JSON.stringify({
-          type:'room_list',
-          rooms: Object.entries(chatRooms)
-            .filter(([_,r]) => !r.isPrivate)
-            .map(([n,r]) => ({ name:n, userCount:r.users.size }))
-        }));
+        const publicRooms = Object.entries(chatRooms)
+          .filter(([_, room]) => !room.isPrivate)
+          .map(([name, room]) => ({ name, userCount: room.users.size }));
+        ws.send(JSON.stringify({ type: 'room_list', rooms: publicRooms }));
         break;
 
       case 'join_room':
+        if (!clientData.username) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Set username first' }));
+          return;
+        }
+        if (!chatRooms[data.roomName]) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
+          return;
+        }
         joinRoom(ws, data.roomName);
+        break;
+
+      case 'chat_message':
+        if (!clientData.currentRoom) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Join a room first' }));
+          return;
+        }
+        handleChatMessage(ws, clientData.currentRoom, data.text);
         break;
 
       case 'leave_room':
         leaveRoom(ws);
         break;
 
-      case 'chat_message':
-        handleChat(ws, data.text);
-        break;
-
       default:
-        ws.send(JSON.stringify({ type:'error', message:'Unknown action' }));
+        ws.send(JSON.stringify({ type: 'error', message: 'Unknown command' }));
     }
   });
 
@@ -110,88 +100,98 @@ wss.on('connection', ws => {
   });
 });
 
-function joinRoom(ws, name) {
-  const client = clients.get(ws);
-  const room = chatRooms[name];
-  if (!room) return ws.send(JSON.stringify({ type:'error', message:'No room' }));
-  if (room.banned.has(client.username)) {
-    return ws.send(JSON.stringify({ type:'error', message:'Banned' }));
-  }
+function joinRoom(ws, roomName) {
+  const clientData = clients.get(ws);
   leaveRoom(ws);
+
+  const room = chatRooms[roomName];
+  if (room.banned.has(clientData.username)) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Banned from room' }));
+    return;
+  }
+
+  clientData.currentRoom = roomName;
   room.users.add(ws);
-  client.currentRoom = name;
-  ws.send(JSON.stringify({ type:'joined_room', roomName:name, isHost:room.host===client.username }));
-  room.messages.forEach(m =>
-    ws.send(JSON.stringify({ type:'message', user:m.user, text:m.text, isHostMsg:false }))
-  );
-  broadcast(name, { type:'message', user:'System', text:`${client.username} joined`, isHostMsg:false });
-  updateRooms();
+
+  ws.send(JSON.stringify({ type: 'joined_room', roomName, isHost: room.host === clientData.username }));
+  ws.send(JSON.stringify({ type: 'room_status', isPrivate: room.isPrivate }));
+
+  // Send existing messages
+  room.messages.forEach(m => {
+    ws.send(JSON.stringify({ type: 'message', user: m.user, text: m.text, isHostMsg: m.user === room.host }));
+  });
+
+  broadcast(roomName, { type: 'message', user: 'System', text: `${clientData.username} joined.`, isHostMsg: false });
+  sendRoomListUpdate();
 }
 
 function leaveRoom(ws) {
-  const client = clients.get(ws);
-  if (!client.currentRoom) return;
-  const room = chatRooms[client.currentRoom];
+  const clientData = clients.get(ws);
+  if (!clientData.currentRoom) return;
+  const room = chatRooms[clientData.currentRoom];
   room.users.delete(ws);
-  broadcast(client.currentRoom, { type:'message', user:'System', text:`${client.username} left`, isHostMsg:false });
-  if (room.users.size === 0) delete chatRooms[client.currentRoom];
-  client.currentRoom = null;
-  updateRooms();
+  broadcast(clientData.currentRoom, { type: 'message', user: 'System', text: `${clientData.username} left.`, isHostMsg: false });
+  if (room.users.size === 0) delete chatRooms[clientData.currentRoom];
+  clientData.currentRoom = null;
+  sendRoomListUpdate();
 }
 
-function updateRooms() {
-  const list = Object.entries(chatRooms)
-    .filter(([_,r]) => !r.isPrivate)
-    .map(([n,r]) => ({ name:n, userCount:r.users.size }));
+function handleChatMessage(ws, roomName, text) {
+  const clientData = clients.get(ws);
+  const room = chatRooms[roomName];
+  if (room.muted.has(clientData.username)) {
+    // ignore messages from muted users
+    return;
+  }
+  if (text.startsWith('!cmd') && clientData.username === room.host) {
+    handleCommand(ws, room, text);
+    return;
+  }
+  const msg = { user: clientData.username, text };
+  room.messages.push(msg);
+  broadcast(roomName, { type: 'message', user: clientData.username, text, isHostMsg: false });
+}
+
+function handleCommand(ws, room, text) {
+  const clientData = clients.get(ws);
+  const parts = text.split(' ');
+  const cmd = parts[1];
+  const arg = parts[2];
+  let feedback = 'denied';
+
+  switch (cmd) {
+    case 'mute':
+      if (arg && !room.muted.has(arg)) {
+        room.muted.add(arg);
+        feedback = 'done!';
+      }
+      break;
+    case 'clear':
+      room.messages = [];
+      feedback = 'done!';
+      break;
+    case 'shutdown':
+      room.users.forEach(u => u.close());
+      delete chatRooms[room.host];
+      feedback = 'done!';
+      break;
+    default:
+      feedback = 'denied';
+  }
+
+  ws.send(JSON.stringify({ type: 'message', user: 'System', text: feedback, isHostMsg: false }));
+  sendRoomListUpdate();
+}
+
+function sendRoomListUpdate() {
+  const publicRooms = Object.entries(chatRooms)
+    .filter(([_, room]) => !room.isPrivate)
+    .map(([name, room]) => ({ name, userCount: room.users.size }));
   wss.clients.forEach(c => {
     if (c.readyState === WebSocket.OPEN) {
-      c.send(JSON.stringify({ type:'room_list', rooms:list }));
+      c.send(JSON.stringify({ type: 'room_list', rooms: publicRooms }));
     }
   });
 }
 
-function handleChat(ws, text) {
-  const client = clients.get(ws);
-  const room  = chatRooms[client.currentRoom];
-  if (!room || room.muted.has(client.username)) return;
-
-  if (text.startsWith('!cmd ') && client.username === room.host) {
-    const parts = text.split(' ');
-    const cmd   = parts[1];
-    const arg   = parts[2];
-    const nick  = parts[3];
-    let ok=false;
-
-    switch(cmd) {
-      case 'mute':    if(arg&&!room.muted.has(arg)){ room.muted.add(arg); ok=true;} break;
-      case 'clear':   room.messages=[]; ok=true; break;
-      case 'shutdown':
-        room.users.forEach(x=>x.close());
-        delete chatRooms[client.currentRoom];
-        ok=true;
-        break;
-      case 'kick':
-        room.users.forEach(x=>{
-          const d=clients.get(x);
-          if(d.username===arg){
-            x.send(JSON.stringify({ type:'message', user:'System', text:'You were kicked', isHostMsg:false }));
-            leaveRoom(x);
-          }
-        });
-        ok=true;
-        break;
-      case 'ban':     if(arg){ room.banned.add(arg); ok=true;} break;
-      case 'nick':    if(arg&&nick){ room.nicknames.set(arg,nick); ok=true;} break;
-    }
-
-    ws.send(JSON.stringify({ type:'message', user:'System', text: ok?'done!':'denied', isHostMsg:false }));
-    return updateRooms();
-  }
-
-  // Normal message
-  const display = room.nicknames.get(client.username) || client.username;
-  room.messages.push({ user:display, text });
-  broadcast(client.currentRoom, { type:'message', user:display, text, isHostMsg:false });
-}
-
-console.log('Server listening on port', port);
+console.log('Chat server running on port', port);
