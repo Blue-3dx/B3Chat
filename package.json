@@ -1,7 +1,6 @@
 {
-  "name": "chat-server",
+  "name": "b3chat",
   "version": "1.0.0",
-  "description": "WebSocket chat server for Fly.io deployment",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
