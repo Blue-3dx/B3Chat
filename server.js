@@ -4,6 +4,44 @@ const wss = new WebSocket.Server({ port });
 
 let clients = new Map(); // ws -> { username, currentRoom }
 let chatRooms = {}; // roomName -> { host, users:Set(ws), isPrivate, banned:Set(username), muted:Set(username), messages: [] }
+function applyColorCodes(text) {
+  const codeMap = {
+    '%0': '#000000', // black
+    '%1': '#0000AA', // dark blue
+    '%2': '#00AA00', // dark green
+    '%3': '#00AAAA', // dark cyan
+    '%4': '#AA0000', // maroon
+    '%5': '#AA00AA', // purple
+    '%6': '#FFAA00', // gold
+    '%7': '#AAAAAA', // light gray
+    '%8': '#555555', // gray
+    '%9': '#5555FF', // light blue
+    '%a': '#55FF55', // green
+    '%b': '#55FFFF', // cyan
+    '%c': '#FF5555', // red
+    '%d': '#FF55FF', // pink
+    '%e': '#FFFF55', // yellow
+    '%f': '#FFFFFF'  // white
+  };
+
+  let result = '';
+  let segments = text.split(/(%[0-9a-f])/gi);
+  let currentColor = null;
+
+  for (let segment of segments) {
+    if (codeMap[segment?.toLowerCase()]) {
+      currentColor = codeMap[segment.toLowerCase()];
+    } else if (segment) {
+      if (currentColor) {
+        result += `<span style="color:${currentColor}">${segment}</span>`;
+      } else {
+        result += segment;
+      }
+    }
+  }
+
+  return result;
+}
 
 function broadcast(roomName, data) {
   if (!chatRooms[roomName]) return;
@@ -82,31 +120,6 @@ wss.on('connection', ws => {
           ws.send(JSON.stringify({ type: 'error', message: 'Join a room first' }));
           return;
         }
-function applyColorCodes(text) {
-  const codeMap = {
-    '%0': '#000000', // black
-    '%1': '#0000AA', // dark blue
-    '%2': '#00AA00', // dark green
-    '%3': '#00AAAA', // dark cyan
-    '%4': '#AA0000', // maroon
-    '%5': '#AA00AA', // purple
-    '%6': '#FFAA00', // gold
-    '%7': '#AAAAAA', // light gray
-    '%8': '#555555', // dark gray
-    '%9': '#5555FF', // light blue
-    '%a': '#55FF55', // green
-    '%b': '#55FFFF', // cyan
-    '%c': '#FF5555', // red
-    '%d': '#FF55FF', // pink
-    '%e': '#FFFF55', // yellow
-    '%f': '#FFFFFF', // white
-  };
-
-  return text.replace(/%[0-9a-f]/gi, match => {
-    const color = codeMap[match.toLowerCase()];
-    return color ? `<span style="color:${color}">` : match;
-  }) + '</span>'.repeat((text.match(/%[0-9a-f]/gi) || []).length);
-}
 
         handleChatMessage(ws, clientData.currentRoom, data.text);
         break;
@@ -175,7 +188,9 @@ function handleChatMessage(ws, roomName, text) {
   }
   const msg = { user: clientData.username, text };
   room.messages.push(msg);
-  broadcast(roomName, { type: 'message', user: clientData.username, text, isHostMsg: false });
+  const coloredText = applyColorCodes(text);
+broadcast(roomName, { type: 'message', user: clientData.username, text: coloredText, isHostMsg: false });
+
 }
 
 function handleCommand(ws, room, text) {
