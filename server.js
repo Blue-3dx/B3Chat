@@ -144,14 +144,6 @@ function handleChatMessage(ws, roomName, text) {
     return;
   }
   if (text.startsWith('!cmd') && clientData.username === room.host) {
-    handleCommand(ws, room, text);
-    return;
-  }
-  const msg = { user: clientData.username, text };
-  room.messages.push(msg);
-  broadcast(roomName, { type: 'message', user: clientData.username, text, isHostMsg: false });
-}
-
 function handleCommand(ws, room, text) {
   const clientData = clients.get(ws);
   const parts = text.split(' ');
@@ -175,6 +167,14 @@ function handleCommand(ws, room, text) {
       delete chatRooms[room.host];
       feedback = 'done!';
       break;
+    case 'private':
+      room.isPrivate = true;
+      feedback = 'done!';
+      break;
+    case 'public':
+      room.isPrivate = false;
+      feedback = 'done!';
+      break;
     default:
       feedback = 'denied';
   }
@@ -182,6 +182,7 @@ function handleCommand(ws, room, text) {
   ws.send(JSON.stringify({ type: 'message', user: 'System', text: feedback, isHostMsg: false }));
   sendRoomListUpdate();
 }
+
 
 function sendRoomListUpdate() {
   const publicRooms = Object.entries(chatRooms)
