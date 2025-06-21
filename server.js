@@ -182,16 +182,6 @@ function handleChat(ws, text) {
         break;
       case 'ban':     if(arg){ room.banned.add(arg); ok=true;} break;
       case 'nick':    if(arg&&nick){ room.nicknames.set(arg,nick); ok=true;} break;
-   case 'private':
-     room.isPrivate = true;
-     ok = true;
-     break;
-
-   case 'public':
-     room.isPrivate = false;
-     ok = true;
-     break;
-
     }
 
     ws.send(JSON.stringify({ type:'message', user:'System', text: ok?'done!':'denied', isHostMsg:false }));
