@@ -82,6 +82,32 @@ wss.on('connection', ws => {
           ws.send(JSON.stringify({ type: 'error', message: 'Join a room first' }));
           return;
         }
+function applyColorCodes(text) {
+  const codeMap = {
+    '%0': '#000000', // black
+    '%1': '#0000AA', // dark blue
+    '%2': '#00AA00', // dark green
+    '%3': '#00AAAA', // dark cyan
+    '%4': '#AA0000', // maroon
+    '%5': '#AA00AA', // purple
+    '%6': '#FFAA00', // gold
+    '%7': '#AAAAAA', // light gray
+    '%8': '#555555', // dark gray
+    '%9': '#5555FF', // light blue
+    '%a': '#55FF55', // green
+    '%b': '#55FFFF', // cyan
+    '%c': '#FF5555', // red
+    '%d': '#FF55FF', // pink
+    '%e': '#FFFF55', // yellow
+    '%f': '#FFFFFF', // white
+  };
+
+  return text.replace(/%[0-9a-f]/gi, match => {
+    const color = codeMap[match.toLowerCase()];
+    return color ? `<span style="color:${color}">` : match;
+  }) + '</span>'.repeat((text.match(/%[0-9a-f]/gi) || []).length);
+}
+
         handleChatMessage(ws, clientData.currentRoom, data.text);
         break;
 
@@ -144,6 +170,14 @@ function handleChatMessage(ws, roomName, text) {
     return;
   }
   if (text.startsWith('!cmd') && clientData.username === room.host) {
+    handleCommand(ws, room, text);
+    return;
+  }
+  const msg = { user: clientData.username, text };
+  room.messages.push(msg);
+  broadcast(roomName, { type: 'message', user: clientData.username, text, isHostMsg: false });
+}
+
 function handleCommand(ws, room, text) {
   const clientData = clients.get(ws);
   const parts = text.split(' ');
@@ -155,25 +189,46 @@ function handleCommand(ws, room, text) {
     case 'mute':
       if (arg && !room.muted.has(arg)) {
         room.muted.add(arg);
-        feedback = 'done!';
+        feedback = `muted ${arg}`;
+      }
+      break;
+    case 'unmute':
+      if (arg && room.muted.has(arg)) {
+        room.muted.delete(arg);
+        feedback = `unmuted ${arg}`;
+      }
+      break;
+    case 'kick':
+      if (arg) {
+        const target = [...clients.entries()].find(([sock, data]) => data.username === arg && room.users.includes(sock));
+        if (target) {
+          const [targetSock] = target;
+          targetSock.send(JSON.stringify({ type: 'error', message: 'You have been kicked from the room.' }));
+          targetSock.close();
+          feedback = `kicked ${arg}`;
+        }
       }
       break;
     case 'clear':
       room.messages = [];
-      feedback = 'done!';
+      feedback = 'cleared messages';
       break;
     case 'shutdown':
       room.users.forEach(u => u.close());
       delete chatRooms[room.host];
-      feedback = 'done!';
+      feedback = 'room shut down';
       break;
     case 'private':
       room.isPrivate = true;
-      feedback = 'done!';
+      feedback = 'room is now private';
       break;
     case 'public':
       room.isPrivate = false;
-      feedback = 'done!';
+      feedback = 'room is now public';
+      break;
+    case 'all':
+      feedback =
+        '%eAvailable Commands:%f !cmd mute <user>, !cmd unmute <user>, !cmd kick <user>, !cmd clear, !cmd shutdown, !cmd public, !cmd private, !cmd all';
       break;
     default:
       feedback = 'denied';
