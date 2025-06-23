@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Create Account</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 400px;
+      margin: 3em auto;
+      background: #f4f4f4;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+    }
+    input, button {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      box-sizing: border-box;
+    }
+    .error {
+      color: red;
+      font-size: 0.9em;
+      margin-top: 8px;
+    }
+    .link-button {
+      background: none;
+      border: none;
+      color: blue;
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 0.95em;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <h2>Create an Account</h2>
+
+  <input type="text" id="newUsername" placeholder="Username" />
+  <input type="password" id="newPassword" placeholder="Password" />
+  <button id="registerBtn">Register</button>
+
+  <p id="regError" class="error"></p>
+
+  <p>
+    Already have an account?
+    <button id="goLogin" class="link-button">Login here</button>
+  </p>
+
+  <script>
+    const registerBtn = document.getElementById('registerBtn');
+    const newUsername = document.getElementById('newUsername');
+    const newPassword = document.getElementById('newPassword');
+    const regError = document.getElementById('regError');
+    const goLogin = document.getElementById('goLogin');
+
+    registerBtn.onclick = () => {
+      const user = newUsername.value.trim();
+      const pass = newPassword.value;
+
+      if (!user || !pass) {
+        regError.textContent = 'Both fields are required.';
+        return;
+      }
+
+      fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pass })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok) {
+          alert('Account created! Please log in.');
+          window.location.href = '/';
+        } else {
+          regError.textContent = res.error || 'Registration failed.';
+        }
+      })
+      .catch(() => {
+        regError.textContent = 'Network error. Please try again.';
+      });
+    };
+
+    goLogin.onclick = () => {
+      window.location.href = './Index.html';
+    };
+  </script>
+</body>
+</html>
