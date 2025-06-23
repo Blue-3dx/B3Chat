@@ -7,6 +7,9 @@ const WebSocket = require('ws');
 const app = express();
 app.use(express.json());
 app.use(express.static(__dirname)); // Serve HTML files
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/index.html');
+});
 
 const db = new sqlite3.Database('users.db', err => {
   if (err) console.error('SQLite error:', err);
