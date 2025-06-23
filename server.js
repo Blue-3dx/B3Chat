@@ -1,6 +1,40 @@
++const express   = require('express');
++const http      = require('http');
++const sqlite3   = require('sqlite3').verbose();
++// ─── init Express & SQLite ───
++const app = express();
++app.use(express.json());
++app.use(express.static(__dirname));  // serve index.html, register.html, etc.
++
++// open (or create) users.db
++const db = new sqlite3.Database('users.db', err => {
++  if (err) console.error('SQLite error:', err);
++  else {
++    db.run(`CREATE TABLE IF NOT EXISTS users (
++      username TEXT PRIMARY KEY,
++      password TEXT NOT NULL
++    )`);
++  }
++});
+
 const WebSocket = require('ws');
-const port = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port });
+- const port = process.env.PORT || 8080;
+- const wss = new WebSocket.Server({ port });
+- console.log('Chat server running on port', port);
++ // Use the PORT env var (Render) or 8080 locally
++ const port = process.env.PORT || 8080;
++
++ // Create an Express HTTP server...
++ const server = http.createServer(app);
++
++ // …and bind WebSocket to that same HTTP server
++ const wss = new WebSocket.Server({ server });
++
++ // Start listening
++ server.listen(port, () => {
++   console.log(`Server listening on port ${port}`);
++ });
+
 
 let clients = new Map(); // ws -> { username, currentRoom }
 let chatRooms = {}; // roomName -> { host, users:Set(ws), isPrivate, banned:Set(username), muted:Set(username), messages: [] }
@@ -108,6 +142,32 @@ function broadcast(roomName, data) {
     }
   });
 }
+// ─── Registration endpoint ───
+app.post('/register', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.json({ ok: false, error: 'Missing fields' });
+  db.run(
+    `INSERT INTO users(username,password) VALUES(?,?)`,
+    [username, password],
+    err => {
+      if (err) return res.json({ ok: false, error: 'User exists' });
+      res.json({ ok: true });
+    }
+  );
+});
+
+// ─── Login endpoint ───
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  db.get(
+    `SELECT password FROM users WHERE username = ?`,
+    [username],
+    (err, row) => {
+      if (err || !row || row.password !== password) return res.json({ ok: false });
+      res.json({ ok: true });
+    }
+  );
+});
 
 wss.on('connection', ws => {
   clients.set(ws, { username: null, currentRoom: null });
