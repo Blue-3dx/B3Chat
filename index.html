@@ -38,6 +38,17 @@
     .center {
       text-align: center;
     }
+    #adminConsoleBtn {
+      display: none;
+      color: #5865f2;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 12px;
+      cursor: pointer;
+    }
+    #adminConsoleBtn:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -54,12 +65,17 @@
     <button id="goRegister" class="link-button">Create an account</button>
   </p>
 
+  <p class="center">
+    <span id="adminConsoleBtn">You are an admin? Want to access the console? Click here!</span>
+  </p>
+
   <script>
     const loginBtn = document.getElementById('loginBtn');
     const usernameInput = document.getElementById('usernameInput');
     const passwordInput = document.getElementById('passwordInput');
     const loginError = document.getElementById('loginError');
     const goRegister = document.getElementById('goRegister');
+    const adminConsoleBtn = document.getElementById('adminConsoleBtn');
 
     loginBtn.onclick = () => {
       const user = usernameInput.value.trim();
@@ -80,7 +96,12 @@
             loginError.textContent = 'Incorrect username or password.';
             return;
           }
-          // Redirect to chat.html with ?username=...
+
+          // Store login info locally
+          localStorage.setItem("username", user);
+          localStorage.setItem("admin", res.admin ? "true" : "false");
+
+          // Redirect to chat or show admin option
           window.location.href = '/chat.html?username=' + encodeURIComponent(user);
         })
         .catch(() => {
@@ -91,6 +112,14 @@
     goRegister.onclick = () => {
       window.location.href = '/register.html';
     };
+
+    // If already logged in and is admin, show the console button
+    if (localStorage.getItem("admin") === "true") {
+      adminConsoleBtn.style.display = "block";
+      adminConsoleBtn.onclick = () => {
+        window.location.href = '/console.html';
+      };
+    }
   </script>
 </body>
 </html>
