@@ -15,11 +15,15 @@
     #chatroom-list ul { list-style: none; padding: 0; }
     #chatroom-list li { padding: 8px; background: white; margin-bottom: 5px; cursor: pointer; border: 1px solid #ccc; }
     #chatroom-list li:hover { background: #e9ecef; }
+    #searchUsersBtn { background-color: #7289da; color: white; font-weight: bold; }
   </style>
 </head>
 <body>
 
 <h2>Welcome, <span id="currentUsername"></span></h2>
+
+<!-- ✅ NEW: Search for Users button -->
+<button id="searchUsersBtn">Search For Users</button>
 
 <input type="text" id="newRoomName" placeholder="New Chatroom Name" />
 <button id="createRoomBtn">Create a Chatroom</button>
@@ -41,25 +45,22 @@
 <script>
 (() => {
   let ws;
-  let username = null;
+  let username = localStorage.getItem("username"); // ✅ Secure fetch
   let currentRoom = null;
   let isHost = false;
 
-  // Get username from query string
-  const params = new URLSearchParams(window.location.search);
-  username = params.get('username');
-
   if (!username) {
-    alert('Username is missing. Please login again.');
+    alert('Not logged in. Please login again.');
     window.location.href = '/';
     return;
   }
 
-  // Elements
-  const currentUsernameSpan = document.getElementById('currentUsername');
+  document.getElementById('currentUsername').textContent = username;
+
   const newRoomNameInput = document.getElementById('newRoomName');
   const createRoomBtn = document.getElementById('createRoomBtn');
   const searchRoomsBtn = document.getElementById('searchRoomsBtn');
+  const searchUsersBtn = document.getElementById('searchUsersBtn');
   const roomsUl = document.getElementById('roomsUl');
   const chatroomDiv = document.getElementById('chatroom');
   const roomTitleSpan = document.getElementById('roomTitle');
@@ -69,9 +70,10 @@
   const sendMessageBtn = document.getElementById('sendMessageBtn');
   const leaveRoomBtn = document.getElementById('leaveRoomBtn');
 
-  currentUsernameSpan.textContent = username;
+  searchUsersBtn.onclick = () => {
+    window.location.href = '/users.html';
+  };
 
-  // --- WebSocket Setup ---
   function connectWebSocket() {
     ws = new WebSocket('wss://b3chat.onrender.com');
 
@@ -103,7 +105,6 @@
 
   connectWebSocket();
 
-  // --- Handle server messages ---
   function handleServerMessage(data) {
     switch (data.type) {
       case 'room_list': displayRoomList(data.rooms); break;
@@ -139,6 +140,7 @@
     newRoomNameInput.disabled = true;
     createRoomBtn.disabled = true;
     searchRoomsBtn.disabled = true;
+    searchUsersBtn.disabled = true;
     addMessage('System', `You joined the room as ${isHost ? 'Host' : 'User'}`, false);
   }
 
@@ -197,6 +199,7 @@
     newRoomNameInput.disabled = false;
     createRoomBtn.disabled = false;
     searchRoomsBtn.disabled = false;
+    searchUsersBtn.disabled = false;
     messagesDiv.innerHTML = '';
   }
 
