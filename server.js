@@ -15,16 +15,19 @@ const path = require('path');
 const db = new sqlite3.Database(path.join(__dirname, 'data', 'users.db'), err => {
   if (err) console.error('SQLite error:', err);
   else {
+    // Create users table if not exists, then try adding 'admin' column safely
     db.run(`CREATE TABLE IF NOT EXISTS users (
       username TEXT PRIMARY KEY,
       password TEXT NOT NULL
-    )`);
-db.run(`ALTER TABLE users ADD COLUMN admin INTEGER DEFAULT 0`, err => {
-  if (err && !err.message.includes('duplicate column')) {
-    console.error('Error adding admin column:', err);
-  }
-});
-
+    )`, () => {
+      db.run(`ALTER TABLE users ADD COLUMN admin INTEGER DEFAULT 0`, err => {
+        if (err && !err.message.includes('duplicate column')) {
+          console.error('Error adding admin column:', err);
+        } else {
+          console.log('Admin column exists or added successfully');
+        }
+      });
+    });
   }
 });
 
@@ -46,16 +49,16 @@ app.post('/register', (req, res) => {
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   console.log('[LOGIN]', req.body);
-db.get(
-  `SELECT password, admin FROM users WHERE username = ?`,
-  [username],
-  (err, row) => {
-    if (err || !row || row.password !== password) return res.json({ ok: false });
-    res.json({ ok: true, admin: row.admin === 1 });
-  }
-);
-
+  db.get(
+    `SELECT password, admin FROM users WHERE username = ?`,
+    [username],
+    (err, row) => {
+      if (err || !row || row.password !== password) return res.json({ ok: false });
+      res.json({ ok: true, admin: row.admin === 1 });
+    }
+  );
 });
+
 
 // ─── WebSocket Setup ───
 const port = process.env.PORT || 8080;
