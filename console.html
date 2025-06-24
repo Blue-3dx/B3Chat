@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Console</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: #2b2d31;
+      color: white;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    .console-container {
+      background: #1e1f22;
+      border-radius: 10px;
+      padding: 20px;
+      width: 90%;
+      max-width: 600px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    h1 {
+      margin-top: 0;
+      color: #f5f5f5;
+    }
+    input, button {
+      font-size: 16px;
+      padding: 10px;
+      margin: 10px 0;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+    }
+    input {
+      background: #313338;
+      color: white;
+    }
+    button {
+      background: #5865f2;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #4752c4;
+    }
+    #console-output {
+      margin-top: 10px;
+      background: #1a1b1e;
+      border-radius: 5px;
+      padding: 10px;
+      height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="console-container" id="console-box" style="display:none;">
+    <h1>Admin Console</h1>
+    <input type="text" id="command" placeholder="Type a command..." />
+    <button onclick="sendCommand()">Execute</button>
+    <div id="console-output"></div>
+  </div>
+
+  <script>
+    const username = localStorage.getItem("username");
+    const isAdmin = localStorage.getItem("admin") === "true";
+
+    if (!username || !isAdmin) {
+      document.body.innerHTML = "<h2 style='color:white;text-align:center'>Access Denied</h2>";
+      throw new Error("Not authorized");
+    }
+
+    document.getElementById("console-box").style.display = "block";
+
+    const ws = new WebSocket("wss://" + location.host);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "set_username", username }));
+    };
+
+    ws.onmessage = event => {
+      const data = JSON.parse(event.data);
+      const output = document.getElementById("console-output");
+
+      if (data.type === "error") {
+        output.textContent += "\n❌ " + data.message;
+      } else if (data.type === "message") {
+        output.textContent += "\n✅ " + (data.message || data.text || JSON.stringify(data));
+      }
+      output.scrollTop = output.scrollHeight;
+    };
+
+    function sendCommand() {
+      const cmd = document.getElementById("command").value.trim();
+      if (!cmd) return;
+      ws.send(JSON.stringify({ type: "admin_command", command: cmd }));
+      document.getElementById("command").value = "";
+    }
+  </script>
+</body>
+</html>
