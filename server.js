@@ -19,6 +19,12 @@ const db = new sqlite3.Database(path.join(__dirname, 'data', 'users.db'), err =>
       username TEXT PRIMARY KEY,
       password TEXT NOT NULL
     )`);
+db.run(`ALTER TABLE users ADD COLUMN admin INTEGER DEFAULT 0`, err => {
+  if (err && !err.message.includes('duplicate column')) {
+    console.error('Error adding admin column:', err);
+  }
+});
+
   }
 });
 
@@ -40,14 +46,15 @@ app.post('/register', (req, res) => {
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   console.log('[LOGIN]', req.body);
-  db.get(
-    `SELECT password FROM users WHERE username = ?`,
-    [username],
-    (err, row) => {
-      if (err || !row || row.password !== password) return res.json({ ok: false });
-      res.json({ ok: true });
-    }
-  );
+db.get(
+  `SELECT password, admin FROM users WHERE username = ?`,
+  [username],
+  (err, row) => {
+    if (err || !row || row.password !== password) return res.json({ ok: false });
+    res.json({ ok: true, admin: row.admin === 1 });
+  }
+);
+
 });
 
 // ─── WebSocket Setup ───
@@ -159,8 +166,19 @@ wss.on('connection', ws => {
     }
 
     const clientData = clients.get(ws);
+if (data.type === 'admin_command') {
+  handleAdminCommand(ws, data.command);
+  return;  // Important: stop further processing here
+}
+
     switch (data.type) {
-      case 'set_username': clientData.username = data.username; break;
+case 'set_username': 
+  clientData.username = data.username;
+  db.get(`SELECT admin FROM users WHERE username = ?`, [data.username], (err, row) => {
+    clientData.admin = (row && row.admin === 1);
+  });
+  break;
+
       case 'create_room': {
         if (!clientData.username || !data.roomName || chatRooms[data.roomName]) {
           ws.send(JSON.stringify({ type: 'error', message: 'Cannot create room' }));
@@ -319,3 +337,195 @@ function sendRoomListUpdate() {
 server.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+function handleAdminCommand(ws, commandText) {
+  const clientData = clients.get(ws);
+  if (!clientData.admin) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Access denied: Admins only.' }));
+    return;
+  }
+
+  const parts = commandText.trim().split(' ');
+  const cmd = parts[0].toLowerCase();
+  const args = parts.slice(1);
+
+  switch (cmd) {
+    case 'ban': {
+      const userToBan = args[0];
+      if (!userToBan) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: ban <user>' }));
+        return;
+      }
+      db.run(`DELETE FROM users WHERE username = ?`, [userToBan], function(err) {
+        if (err) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Error banning user' }));
+        } else {
+          for (const [clientWs, data] of clients.entries()) {
+            if (data.username === userToBan) {
+              clientWs.send(JSON.stringify({ type: 'error', message: 'You have been banned.' }));
+              clientWs.close();
+              clients.delete(clientWs);
+            }
+          }
+          ws.send(JSON.stringify({ type: 'message', message: `User ${userToBan} banned.` }));
+        }
+      });
+      break;
+    }
+    case 'rename': {
+      const oldName = args[0];
+      const newName = args[1];
+      if (!oldName || !newName) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: rename <oldname> <newname>' }));
+        return;
+      }
+      db.get(`SELECT username FROM users WHERE username = ?`, [newName], (err, row) => {
+        if (row) {
+          ws.send(JSON.stringify({ type: 'error', message: 'New username already exists.' }));
+          return;
+        }
+        db.run(`UPDATE users SET username = ? WHERE username = ?`, [newName, oldName], function(err) {
+          if (err) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Rename failed.' }));
+          } else {
+            ws.send(JSON.stringify({ type: 'message', message: `${oldName} renamed to ${newName}` }));
+            for (const [clientWs, data] of clients.entries()) {
+              if (data.username === oldName) {
+                data.username = newName;
+                clientWs.send(JSON.stringify({ type: 'message', message: `Your username was changed to ${newName}` }));
+              }
+            }
+          }
+        });
+      });
+      break;
+    }
+    case 'promote': {
+      const userToPromote = args[0];
+      if (!userToPromote) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: promote <user>' }));
+        return;
+      }
+      db.run(`UPDATE users SET admin = 1 WHERE username = ?`, [userToPromote], function(err) {
+        if (err) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Promote failed.' }));
+        } else {
+          ws.send(JSON.stringify({ type: 'message', message: `${userToPromote} promoted to admin.` }));
+        }
+      });
+      break;
+    }
+    case 'demote': {
+      const userToDemote = args[0];
+      if (!userToDemote) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: demote <user>' }));
+        return;
+      }
+      db.run(`UPDATE users SET admin = 0 WHERE username = ?`, [userToDemote], function(err) {
+        if (err) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Demote failed.' }));
+        } else {
+          ws.send(JSON.stringify({ type: 'message', message: `${userToDemote} demoted.` }));
+        }
+      });
+      break;
+    }
+    case 'password': {
+      const userToReset = args[0];
+      const newPass = args[1];
+      if (!userToReset || !newPass) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: password <user> <newpassword>' }));
+        return;
+      }
+      db.run(`UPDATE users SET password = ? WHERE username = ?`, [newPass, userToReset], function(err) {
+        if (err) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Password reset failed.' }));
+        } else {
+          ws.send(JSON.stringify({ type: 'message', message: `Password for ${userToReset} changed.` }));
+        }
+      });
+      break;
+    }
+    case 'mute': {
+      const userToMute = args[0];
+      if (!userToMute) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: mute <user>' }));
+        return;
+      }
+      Object.values(chatRooms).forEach(room => room.muted.add(userToMute));
+      ws.send(JSON.stringify({ type: 'message', message: `${userToMute} muted globally.` }));
+      break;
+    }
+    case 'unmute': {
+      const userToUnmute = args[0];
+      if (!userToUnmute) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: unmute <user>' }));
+        return;
+      }
+      Object.values(chatRooms).forEach(room => room.muted.delete(userToUnmute));
+      ws.send(JSON.stringify({ type: 'message', message: `${userToUnmute} unmuted globally.` }));
+      break;
+    }
+    case 'kick': {
+      const userToKick = args[0];
+      if (!userToKick) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: kick <user>' }));
+        return;
+      }
+      for (const [clientWs, data] of clients.entries()) {
+        if (data.username === userToKick) {
+          clientWs.send(JSON.stringify({ type: 'error', message: 'You have been kicked.' }));
+          clientWs.close();
+          clients.delete(clientWs);
+          ws.send(JSON.stringify({ type: 'message', message: `${userToKick} kicked.` }));
+          return;
+        }
+      }
+      ws.send(JSON.stringify({ type: 'error', message: 'User not found online.' }));
+      break;
+    }
+    case 'clear': {
+      const roomName = args[0];
+      if (!roomName) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: clear <room>' }));
+        return;
+      }
+      const room = chatRooms[roomName];
+      if (!room) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Room does not exist.' }));
+        return;
+      }
+      room.messages = [];
+      ws.send(JSON.stringify({ type: 'message', message: `Messages cleared in ${roomName}` }));
+      break;
+    }
+    case 'rooms': {
+      const list = Object.entries(chatRooms).map(([name, room]) => `${name} (${room.users.size} users)`).join(', ');
+      ws.send(JSON.stringify({ type: 'message', message: `Active rooms: ${list}` }));
+      break;
+    }
+    case 'broadcast': {
+      const msg = args.join(' ');
+      if (!msg) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Usage: broadcast <message>' }));
+        return;
+      }
+      Object.values(chatRooms).forEach(room => {
+        broadcast(room.host, { type: 'message', user: 'Admin', text: msg });
+      });
+      ws.send(JSON.stringify({ type: 'message', message: 'Broadcast sent.' }));
+      break;
+    }
+    case 'all': {
+      const cmds = [
+        'ban <user>', 'rename <oldname> <newname>', 'promote <user>',
+        'demote <user>', 'password <user> <newpassword>',
+        'mute <user>', 'unmute <user>', 'kick <user>',
+        'clear <room>', 'rooms', 'broadcast <message>', 'all'
+      ];
+      ws.send(JSON.stringify({ type: 'message', message: 'Commands: ' + cmds.join(', ') }));
+      break;
+    }
+    default:
+      ws.send(JSON.stringify({ type: 'error', message: 'Unknown command' }));
+  }
+}
