@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chatroom</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
+    #chatroom-list, #chatroom { max-width: 600px; margin: auto; }
+    #chatroom { display: none; }
+    input, button { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+    #messages { height: 300px; overflow-y: auto; background: white; padding: 10px; border: 1px solid #ccc; margin-bottom: 10px; }
+    .message { margin-bottom: 6px; }
+    .host { font-weight: bold; color: #d9534f; }
+    #chatroom-list ul { list-style: none; padding: 0; }
+    #chatroom-list li { padding: 8px; background: white; margin-bottom: 5px; cursor: pointer; border: 1px solid #ccc; }
+    #chatroom-list li:hover { background: #e9ecef; }
+  </style>
+</head>
+<body>
+
+<h2>Welcome, <span id="currentUsername"></span></h2>
+
+<input type="text" id="newRoomName" placeholder="New Chatroom Name" />
+<button id="createRoomBtn">Create a Chatroom</button>
+<button id="searchRoomsBtn">Search for Chatrooms</button>
+
+<div id="chatroom-list" style="margin-top:20px;">
+  <h3>Available Chatrooms</h3>
+  <ul id="roomsUl"></ul>
+</div>
+
+<div id="chatroom">
+  <h3>Chatroom: <span id="roomTitle"></span> <span id="roomStatus" style="font-weight:normal; font-size:small;"></span></h3>
+  <div id="messages"></div>
+  <input type="text" id="messageInput" placeholder="Type message or command" />
+  <button id="sendMessageBtn">Send</button>
+  <button id="leaveRoomBtn" style="background:#dc3545; color:white;">Leave Room</button>
+</div>
+
+<script>
+(() => {
+  let ws;
+  let username = null;
+  let currentRoom = null;
+  let isHost = false;
+
+  // Get username from query string
+  const params = new URLSearchParams(window.location.search);
+  username = params.get('username');
+
+  if (!username) {
+    alert('Username is missing. Please login again.');
+    window.location.href = '/';
+    return;
+  }
+
+  // Elements
+  const currentUsernameSpan = document.getElementById('currentUsername');
+  const newRoomNameInput = document.getElementById('newRoomName');
+  const createRoomBtn = document.getElementById('createRoomBtn');
+  const searchRoomsBtn = document.getElementById('searchRoomsBtn');
+  const roomsUl = document.getElementById('roomsUl');
+  const chatroomDiv = document.getElementById('chatroom');
+  const roomTitleSpan = document.getElementById('roomTitle');
+  const roomStatusSpan = document.getElementById('roomStatus');
+  const messagesDiv = document.getElementById('messages');
+  const messageInput = document.getElementById('messageInput');
+  const sendMessageBtn = document.getElementById('sendMessageBtn');
+  const leaveRoomBtn = document.getElementById('leaveRoomBtn');
+
+  currentUsernameSpan.textContent = username;
+
+  // --- WebSocket Setup ---
+  function connectWebSocket() {
+    ws = new WebSocket(window.location.origin.replace(/^http/, 'ws'));
+
+    ws.onopen = () => {
+      console.log('Connected to server');
+      ws.send(JSON.stringify({ type: 'set_username', username }));
+    };
+
+    ws.onmessage = (event) => {
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        console.warn('Invalid message:', event.data);
+        return;
+      }
+      handleServerMessage(data);
+    };
+
+    ws.onclose = () => {
+      alert('Disconnected from server.');
+      window.location.href = '/';
+    };
+
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+    };
+  }
+
+  connectWebSocket();
+
+  // --- Handle server messages ---
+  function handleServerMessage(data) {
+    switch (data.type) {
+      case 'room_list': displayRoomList(data.rooms); break;
+      case 'joined_room': enterRoom(data.roomName, data.isHost); break;
+      case 'message': addMessage(data.user, data.text, data.isHost); break;
+      case 'room_status': setRoomStatus(data.isPrivate); break;
+      case 'error': alert('Error: ' + data.message); break;
+      case 'left_room': leaveRoomUI(); break;
+      default: console.log('Unknown:', data);
+    }
+  }
+
+  function displayRoomList(rooms) {
+    roomsUl.innerHTML = '';
+    if (rooms.length === 0) {
+      roomsUl.innerHTML = '<li>No public chatrooms available</li>';
+      return;
+    }
+    rooms.forEach(room => {
+      const li = document.createElement('li');
+      li.textContent = `${room.name} (${room.userCount} user${room.userCount !== 1 ? 's' : ''})`;
+      li.onclick = () => joinRoom(room.name);
+      roomsUl.appendChild(li);
+    });
+  }
+
+  function enterRoom(roomName, host) {
+    currentRoom = roomName;
+    isHost = host;
+    roomTitleSpan.textContent = roomName;
+    chatroomDiv.style.display = 'block';
+    document.getElementById('chatroom-list').style.display = 'none';
+    newRoomNameInput.disabled = true;
+    createRoomBtn.disabled = true;
+    searchRoomsBtn.disabled = true;
+    addMessage('System', `You joined the room as ${isHost ? 'Host' : 'User'}`, false);
+  }
+
+  function setRoomStatus(isPrivate) {
+    roomStatusSpan.textContent = isPrivate ? '(Private)' : '(Public)';
+  }
+
+  function addMessage(user, text, isHostMsg) {
+    const div = document.createElement('div');
+    div.className = 'message';
+    if (user === 'System') {
+      div.style.fontStyle = 'italic';
+      div.textContent = `* ${text}`;
+    } else {
+      div.innerHTML = `<span${isHostMsg ? ' class="host"' : ''}>${user}</span>: ${escapeHtml(text)}`;
+    }
+    messagesDiv.appendChild(div);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  function joinRoom(roomName) {
+    ws.send(JSON.stringify({ type: 'join_room', roomName }));
+  }
+
+  createRoomBtn.onclick = () => {
+    const roomName = newRoomNameInput.value.trim();
+    if (!roomName) {
+      alert('Please enter a chatroom name.');
+      return;
+    }
+    ws.send(JSON.stringify({ type: 'create_room', roomName }));
+  };
+
+  sendMessageBtn.onclick = () => sendMessage();
+  messageInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendMessage();
+  });
+
+  function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text) return;
+    ws.send(JSON.stringify({ type: 'chat_message', roomName: currentRoom, text }));
+    messageInput.value = '';
+  }
+
+  leaveRoomBtn.onclick = () => {
+    ws.send(JSON.stringify({ type: 'leave_room', roomName: currentRoom }));
+    leaveRoomUI();
+  };
+
+  function leaveRoomUI() {
+    currentRoom = null;
+    isHost = false;
+    chatroomDiv.style.display = 'none';
+    document.getElementById('chatroom-list').style.display = 'block';
+    newRoomNameInput.disabled = false;
+    createRoomBtn.disabled = false;
+    searchRoomsBtn.disabled = false;
+    messagesDiv.innerHTML = '';
+  }
+
+  searchRoomsBtn.onclick = () => {
+    ws.send(JSON.stringify({ type: 'list_rooms' }));
+  };
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+})();
+</script>
+</body>
+</html>
