@@ -11,7 +11,8 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
 
-const db = new sqlite3.Database('users.db', err => {
+const path = require('path');
+const db = new sqlite3.Database(path.join(__dirname, 'data', 'users.db'), err => {
   if (err) console.error('SQLite error:', err);
   else {
     db.run(`CREATE TABLE IF NOT EXISTS users (
