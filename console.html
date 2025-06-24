@@ -2,110 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin Console</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
-      font-family: "Segoe UI", sans-serif;
-      background: #2b2d31;
-      color: white;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-    }
-    .console-container {
-      background: #1e1f22;
-      border-radius: 10px;
-      padding: 20px;
-      width: 90%;
+      font-family: Arial, sans-serif;
       max-width: 600px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      margin: 60px auto;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    h1 {
-      margin-top: 0;
-      color: #f5f5f5;
-    }
-    input, button {
-      font-size: 16px;
-      padding: 10px;
-      margin: 10px 0;
+    h2 { text-align: center; }
+    textarea {
       width: 100%;
-      border: none;
-      border-radius: 5px;
+      height: 120px;
+      margin: 10px 0;
+      padding: 10px;
+      font-family: monospace;
+      box-sizing: border-box;
     }
-    input {
-      background: #313338;
-      color: white;
-    }
-    button {
-      background: #5865f2;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #4752c4;
-    }
-    #console-output {
-      margin-top: 10px;
-      background: #1a1b1e;
-      border-radius: 5px;
+    #output {
+      background: #f7f7f7;
+      border: 1px solid #ccc;
       padding: 10px;
       height: 200px;
       overflow-y: auto;
-      font-family: monospace;
-      font-size: 14px;
       white-space: pre-wrap;
+      font-family: monospace;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: #7289da;
+      color: white;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+    }
+    .error {
+      color: red;
+      font-size: 0.95em;
+      margin-bottom: 8px;
     }
   </style>
 </head>
 <body>
-  <div class="console-container" id="console-box" style="display:none;">
-    <h1>Admin Console</h1>
-    <input type="text" id="command" placeholder="Type a command..." />
-    <button onclick="sendCommand()">Execute</button>
-    <div id="console-output"></div>
-  </div>
+  <h2>Admin Console</h2>
+
+  <div id="accessDenied" class="error" style="display:none;">❌ Access Denied: You are not an admin.</div>
+
+  <textarea id="commandInput" placeholder="Type admin command..."></textarea>
+  <button id="sendBtn">Execute</button>
+
+  <h3>Output:</h3>
+  <div id="output"></div>
 
   <script>
-    const username = localStorage.getItem("username");
-    const isAdmin = localStorage.getItem("admin") === "true";
+    const sendBtn = document.getElementById('sendBtn');
+    const commandInput = document.getElementById('commandInput');
+    const outputDiv = document.getElementById('output');
+    const deniedDiv = document.getElementById('accessDenied');
 
+    const username = localStorage.getItem('username');
+    const isAdmin = localStorage.getItem('admin') === 'true';
+
+    // Access check
     if (!username || !isAdmin) {
-      document.body.innerHTML = "<h2 style='color:white;text-align:center'>Access Denied</h2>";
-      throw new Error("Not authorized");
+      deniedDiv.style.display = 'block';
+      commandInput.disabled = true;
+      sendBtn.disabled = true;
     }
 
-    document.getElementById("console-box").style.display = "block";
+    sendBtn.onclick = () => {
+      const command = commandInput.value.trim();
+      if (!command) return;
 
-    const ws = new WebSocket("wss://" + location.host);
+      fetch('/admin-command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, command })
+      })
+      .then(r => r.json())
+      .then(res => {
+        outputDiv.textContent += `> ${command}\n${res.message}\n\n`;
+        outputDiv.scrollTop = outputDiv.scrollHeight;
+      })
+      .catch(() => {
+        outputDiv.textContent += `> ${command}\nError talking to server\n\n`;
+      });
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "set_username", username }));
+      commandInput.value = '';
     };
-
-    ws.onmessage = event => {
-      const data = JSON.parse(event.data);
-      const output = document.getElementById("console-output");
-
-      if (data.type === "error") {
-        output.textContent += "\n❌ " + data.message;
-      } else if (data.type === "message") {
-        output.textContent += "\n✅ " + (data.message || data.text || JSON.stringify(data));
-      }
-      output.scrollTop = output.scrollHeight;
-    };
-
-    function sendCommand() {
-      const cmd = document.getElementById("command").value.trim();
-      if (!cmd) return;
-      ws.send(JSON.stringify({ type: "admin_command", command: cmd }));
-      document.getElementById("command").value = "";
-    }
   </script>
 </body>
 </html>
