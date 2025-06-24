@@ -73,7 +73,7 @@
 
   // --- WebSocket Setup ---
   function connectWebSocket() {
-    ws = new WebSocket(window.location.origin.replace(/^http/, 'ws'));
+    ws = new WebSocket('wss://b3chat.onrender.com');
 
     ws.onopen = () => {
       console.log('Connected to server');
