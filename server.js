@@ -466,21 +466,22 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: ban <user>' }));
         return;
       }
-      db.run(DELETE FROM users WHERE username = ?, [userToBan], function(err) {
-        if (err) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Error banning user' }));
-        } else {
-          for (const [clientWs, data] of clients.entries()) {
-            if (data.username === userToBan) {
-              clientWs.send(JSON.stringify({ type: 'error', message: 'You have been banned.' }));
-              clientWs.close();
-              clients.delete(clientWs);
-            }
-          }
-          ws.send(JSON.stringify({ type: 'message', message: User ${userToBan} banned. }));
-        }
-      });
-      break;
+db.run("DELETE FROM users WHERE username = ?", [userToBan], function(err) {
+  if (err) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Error banning user' }));
+  } else {
+    for (const [clientWs, data] of clients.entries()) {
+      if (data.username === userToBan) {
+        clientWs.send(JSON.stringify({ type: 'error', message: 'You have been banned.' }));
+        clientWs.close();
+        clients.delete(clientWs);
+      }
+    }
+    ws.send(JSON.stringify({ type: 'message', message: `User ${userToBan} banned.` }));
+  }
+});
+break;
+
     }
     case 'rename': {
       const oldName = args[0];
@@ -489,26 +490,27 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: rename <oldname> <newname>' }));
         return;
       }
-      db.get(SELECT username FROM users WHERE username = ?, [newName], (err, row) => {
-        if (row) {
-          ws.send(JSON.stringify({ type: 'error', message: 'New username already exists.' }));
-          return;
+db.get("SELECT username FROM users WHERE username = ?", [newName], (err, row) => {
+  if (row) {
+    ws.send(JSON.stringify({ type: 'error', message: 'New username already exists.' }));
+    return;
+  }
+  db.run("UPDATE users SET username = ? WHERE username = ?", [newName, oldName], function(err) {
+    if (err) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Rename failed.' }));
+    } else {
+      ws.send(JSON.stringify({ type: 'message', message: `${oldName} renamed to ${newName}` }));
+      for (const [clientWs, data] of clients.entries()) {
+        if (data.username === oldName) {
+          data.username = newName;
+          clientWs.send(JSON.stringify({ type: 'message', message: `Your username was changed to ${newName}` }));
         }
-        db.run(UPDATE users SET username = ? WHERE username = ?, [newName, oldName], function(err) {
-          if (err) {
-            ws.send(JSON.stringify({ type: 'error', message: 'Rename failed.' }));
-          } else {
-            ws.send(JSON.stringify({ type: 'message', message: ${oldName} renamed to ${newName} }));
-            for (const [clientWs, data] of clients.entries()) {
-              if (data.username === oldName) {
-                data.username = newName;
-                clientWs.send(JSON.stringify({ type: 'message', message: Your username was changed to ${newName} }));
-              }
-            }
-          }
-        });
-      });
-      break;
+      }
+    }
+  });
+});
+break;
+
     }
     case 'promote': {
       const userToPromote = args[0];
@@ -516,14 +518,15 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: promote <user>' }));
         return;
       }
-      db.run(UPDATE users SET admin = 1 WHERE username = ?, [userToPromote], function(err) {
-        if (err) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Promote failed.' }));
-        } else {
-          ws.send(JSON.stringify({ type: 'message', message: ${userToPromote} promoted to admin. }));
-        }
-      });
-      break;
+db.run("UPDATE users SET admin = 1 WHERE username = ?", [userToPromote], function(err) {
+  if (err) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Promote failed.' }));
+  } else {
+    ws.send(JSON.stringify({ type: 'message', message: `${userToPromote} promoted to admin.` }));
+  }
+});
+break;
+
     }
     case 'demote': {
       const userToDemote = args[0];
@@ -531,14 +534,15 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: demote <user>' }));
         return;
       }
-      db.run(UPDATE users SET admin = 0 WHERE username = ?, [userToDemote], function(err) {
-        if (err) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Demote failed.' }));
-        } else {
-          ws.send(JSON.stringify({ type: 'message', message: ${userToDemote} demoted. }));
-        }
-      });
-      break;
+db.run("UPDATE users SET admin = 0 WHERE username = ?", [userToDemote], function(err) {
+  if (err) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Demote failed.' }));
+  } else {
+    ws.send(JSON.stringify({ type: 'message', message: `${userToDemote} demoted.` }));
+  }
+});
+break;
+
     }
     case 'password': {
       const userToReset = args[0];
@@ -547,14 +551,15 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: password <user> <newpassword>' }));
         return;
       }
-      db.run(UPDATE users SET password = ? WHERE username = ?, [newPass, userToReset], function(err) {
-        if (err) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Password reset failed.' }));
-        } else {
-          ws.send(JSON.stringify({ type: 'message', message: Password for ${userToReset} changed. }));
-        }
-      });
-      break;
+db.run("UPDATE users SET password = ? WHERE username = ?", [newPass, userToReset], function(err) {
+  if (err) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Password reset failed.' }));
+  } else {
+    ws.send(JSON.stringify({ type: 'message', message: `Password for ${userToReset} changed.` }));
+  }
+});
+break;
+
     }
     case 'mute': {
       const userToMute = args[0];
