@@ -561,29 +561,6 @@ db.run("UPDATE users SET password = ? WHERE username = ?", [newPass, userToReset
 break;
 
     }
-    case 'mute': {
-      const userToMute = args[0];
-      if (!userToMute) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Usage: mute <user>' }));
-        return;
-      }
-      Object.values(chatRooms).forEach(room => room.muted.add(userToMute));
-      ws.send(JSON.stringify({ type: 'message', message: ${userToMute} muted globally. }));
-      break;
-    }
-    case 'unmute': {
-      const userToUnmute = args[0];
-      if (!userToUnmute) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Usage: unmute <user>' }));
-        return;
-      }
-      Object.values(chatRooms).forEach(room => room.muted.delete(userToUnmute));
-      ws.send(JSON.stringify({ type: 'message', message: ${userToUnmute} unmuted globally. }));
-          return;
-        }
-      }
-      ws.send(JSON.stringify({ type: 'error', message: 'User not found online.' }));
-      break;
     case 'broadcast': {
       const msg = args.join(' ');
       if (!msg) {
