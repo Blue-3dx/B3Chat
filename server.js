@@ -51,15 +51,16 @@ db.run(
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-  console.log('[LOGIN]', req.body);
   db.get(
-    SELECT password, admin FROM users WHERE username = ?,
+    'SELECT password, admin FROM users WHERE username = ?',
     [username],
     (err, row) => {
       if (err || !row || row.password !== password) return res.json({ ok: false });
       res.json({ ok: true, admin: row.admin === 1 });
     }
   );
+});
+
 // ─── Get profile info for settings.html ───
 app.get('/profile/:username', (req, res) => {
   const { username } = req.params;
