@@ -368,14 +368,14 @@ switch (cmd) {
   case 'mute':
     if (arg && !room.muted.has(arg)) {
       room.muted.add(arg);
-      feedback = `muted ${arg}`;  // Correct use of backticks
+      feedback = `muted ${arg}`;
     }
     break;
 
   case 'unmute':
     if (arg && room.muted.has(arg)) {
       room.muted.delete(arg);
-      feedback = unmuted ${arg};  // **Error here! Missing backticks**
+      feedback = `unmuted ${arg}`;
     }
     break;
 
@@ -390,7 +390,7 @@ switch (cmd) {
           JSON.stringify({ type: 'error', message: 'You have been kicked.' })
         );
         targetSock.close();
-        feedback = kicked ${arg};  // **Error here! Missing backticks**
+        feedback = `kicked ${arg}`;
       }
     }
     break;
@@ -430,6 +430,7 @@ ws.send(
   JSON.stringify({ type: 'message', user: 'System', text: feedback, isHostMsg: false })
 );
 sendRoomListUpdate();
+
 
 
 function sendRoomListUpdate() {
