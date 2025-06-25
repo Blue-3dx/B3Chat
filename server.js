@@ -365,7 +365,7 @@ function handleCommand(ws, room, text) {
   let feedback = 'denied';
 
   switch (cmd) {
-    case 'mute': if (arg && !room.muted.has(arg)) { room.muted.add(arg); feedback = muted ${arg}; } break;
+case 'mute': if (arg && !room.muted.has(arg)) { room.muted.add(arg); feedback = `muted ${arg}`; } break;
     case 'unmute': if (arg && room.muted.has(arg)) { room.muted.delete(arg); feedback = unmuted ${arg}; } break;
     case 'kick': {
       if (arg) {
