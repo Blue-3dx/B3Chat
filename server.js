@@ -28,9 +28,6 @@ const db = new sqlite3.Database(path.join(__dirname, 'data', 'users.db'), err =>
   }
 });
 
-  }
-});
-
 // ─── Auth Routes ───
 app.post('/register', (req, res) => {
   const { username, password } = req.body;
