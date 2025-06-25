@@ -205,9 +205,10 @@ function applyColorCodes(text) {
   let currentColor = null;
   return text.replace(/%[0-9a-f]/gi, match => {
     currentColor = codeMap[match.toLowerCase()];
-    return <span style="color:${currentColor}">;
+    return `<span style="color:${currentColor}">`;
   }) + (currentColor ? '</span>' : '');
 }
+
 
 function broadcast(roomName, data) {
   if (!chatRooms[roomName]) return;
