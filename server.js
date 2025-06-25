@@ -446,7 +446,7 @@ function sendRoomListUpdate() {
 
 // Start the server
 server.listen(port, () => {
-  console.log(Server listening on port ${port});
+  console.log(`Server listening on port ${port}`);
 });
 function handleAdminCommand(ws, commandText) {
   const clientData = clients.get(ws);
