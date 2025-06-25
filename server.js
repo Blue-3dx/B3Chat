@@ -60,7 +60,6 @@ app.post('/login', (req, res) => {
       res.json({ ok: true, admin: row.admin === 1 });
     }
   );
-});
 // ─── Get profile info for settings.html ───
 app.get('/profile/:username', (req, res) => {
   const { username } = req.params;
