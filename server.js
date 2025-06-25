@@ -64,15 +64,15 @@ app.post('/login', (req, res) => {
 // ─── Get profile info for settings.html ───
 app.get('/profile/:username', (req, res) => {
   const { username } = req.params;
-  db.get(
-    `SELECT bio, bgColor FROM users WHERE username = ?`,
-    [username],
-    (err, row) => {
-      if (err || !row) return res.json({ ok: false, message: 'User not found' });
-      res.json({ ok: true, bio: row.bio, bgColor: row.bgColor });
-    }
-  );
-});
+db.get(
+  `SELECT password, admin FROM users WHERE username = ?`,
+  [username],
+  (err, row) => {
+    if (err || !row || row.password !== password) return res.json({ ok: false });
+    res.json({ ok: true, admin: row.admin === 1 });
+  }
+);
+
 // ─── Update bio, bgColor, and password ───
 app.post('/update-account', (req, res) => {
   const { username, currentPassword, newPassword, bio, bgColor } = req.body;
