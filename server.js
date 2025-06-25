@@ -364,34 +364,73 @@ function handleCommand(ws, room, text) {
   const arg = parts[2];
   let feedback = 'denied';
 
-  switch (cmd) {
-case 'mute': if (arg && !room.muted.has(arg)) { room.muted.add(arg); feedback = `muted ${arg}`; } break;
-    case 'unmute': if (arg && room.muted.has(arg)) { room.muted.delete(arg); feedback = unmuted ${arg}; } break;
-    case 'kick': {
-      if (arg) {
-        const target = [...clients.entries()].find(([sock, data]) => data.username === arg && room.users.has(sock));
-        if (target) {
-          const [targetSock] = target;
-          targetSock.send(JSON.stringify({ type: 'error', message: 'You have been kicked.' }));
-          targetSock.close();
-          feedback = kicked ${arg};
-        }
-      }
-      break;
+switch (cmd) {
+  case 'mute':
+    if (arg && !room.muted.has(arg)) {
+      room.muted.add(arg);
+      feedback = `muted ${arg}`;  // Correct use of backticks
     }
-    case 'clear': room.messages = []; feedback = 'cleared messages'; break;
-    case 'shutdown': room.users.forEach(u => u.close()); delete chatRooms[room.host]; feedback = 'room shut down'; break;
-    case 'private': room.isPrivate = true; feedback = 'room is now private'; break;
-    case 'public': room.isPrivate = false; feedback = 'room is now public'; break;
-    case 'all':
-      feedback = '%eAvailable Commands:%f !cmd mute <user>, !cmd unmute <user>, !cmd kick <user>, !cmd clear, !cmd shutdown, !cmd public, !cmd private, !cmd all';
-      break;
-    default: feedback = 'denied';
+    break;
+
+  case 'unmute':
+    if (arg && room.muted.has(arg)) {
+      room.muted.delete(arg);
+      feedback = unmuted ${arg};  // **Error here! Missing backticks**
+    }
+    break;
+
+  case 'kick': {
+    if (arg) {
+      const target = [...clients.entries()].find(
+        ([sock, data]) => data.username === arg && room.users.has(sock)
+      );
+      if (target) {
+        const [targetSock] = target;
+        targetSock.send(
+          JSON.stringify({ type: 'error', message: 'You have been kicked.' })
+        );
+        targetSock.close();
+        feedback = kicked ${arg};  // **Error here! Missing backticks**
+      }
+    }
+    break;
   }
 
-  ws.send(JSON.stringify({ type: 'message', user: 'System', text: feedback, isHostMsg: false }));
-  sendRoomListUpdate();
+  case 'clear':
+    room.messages = [];
+    feedback = 'cleared messages';
+    break;
+
+  case 'shutdown':
+    room.users.forEach((u) => u.close());
+    delete chatRooms[room.host];
+    feedback = 'room shut down';
+    break;
+
+  case 'private':
+    room.isPrivate = true;
+    feedback = 'room is now private';
+    break;
+
+  case 'public':
+    room.isPrivate = false;
+    feedback = 'room is now public';
+    break;
+
+  case 'all':
+    feedback =
+      '%eAvailable Commands:%f !cmd mute <user>, !cmd unmute <user>, !cmd kick <user>, !cmd clear, !cmd shutdown, !cmd public, !cmd private, !cmd all';
+    break;
+
+  default:
+    feedback = 'denied';
 }
+
+ws.send(
+  JSON.stringify({ type: 'message', user: 'System', text: feedback, isHostMsg: false })
+);
+sendRoomListUpdate();
+
 
 function sendRoomListUpdate() {
   const publicRooms = Object.entries(chatRooms)
