@@ -46,7 +46,7 @@ db.run(
     res.json({ ok: true });
   }
 );
-
+});
 
 
 app.post('/login', (req, res) => {
@@ -72,7 +72,7 @@ db.get(
     res.json({ ok: true, admin: row.admin === 1 });
   }
 );
-
+});
 // ─── Update bio, bgColor, and password ───
 app.post('/update-account', (req, res) => {
   const { username, currentPassword, newPassword, bio, bgColor } = req.body;
