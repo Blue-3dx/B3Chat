@@ -579,46 +579,11 @@ break;
       }
       Object.values(chatRooms).forEach(room => room.muted.delete(userToUnmute));
       ws.send(JSON.stringify({ type: 'message', message: ${userToUnmute} unmuted globally. }));
-      break;
-    }
-    case 'kick': {
-      const userToKick = args[0];
-      if (!userToKick) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Usage: kick <user>' }));
-        return;
-      }
-      for (const [clientWs, data] of clients.entries()) {
-        if (data.username === userToKick) {
-          clientWs.send(JSON.stringify({ type: 'error', message: 'You have been kicked.' }));
-          clientWs.close();
-          clients.delete(clientWs);
-          ws.send(JSON.stringify({ type: 'message', message: ${userToKick} kicked. }));
           return;
         }
       }
       ws.send(JSON.stringify({ type: 'error', message: 'User not found online.' }));
       break;
-    }
-    case 'clear': {
-      const roomName = args[0];
-      if (!roomName) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Usage: clear <room>' }));
-        return;
-      }
-      const room = chatRooms[roomName];
-      if (!room) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Room does not exist.' }));
-        return;
-      }
-      room.messages = [];
-      ws.send(JSON.stringify({ type: 'message', message: Messages cleared in ${roomName} }));
-      break;
-    }
-    case 'rooms': {
-      const list = Object.entries(chatRooms).map(([name, room]) => ${name} (${room.users.size} users)).join(', ');
-      ws.send(JSON.stringify({ type: 'message', message: Active rooms: ${list} }));
-      break;
-    }
     case 'broadcast': {
       const msg = args.join(' ');
       if (!msg) {
@@ -635,8 +600,7 @@ break;
       const cmds = [
         'ban <user>', 'rename <oldname> <newname>', 'promote <user>',
         'demote <user>', 'password <user> <newpassword>',
-        'mute <user>', 'unmute <user>', 'kick <user>',
-        'clear <room>', 'rooms', 'broadcast <message>', 'all'
+        'broadcast <message>', 'all'
       ];
       ws.send(JSON.stringify({ type: 'message', message: 'Commands: ' + cmds.join(', ') }));
       break;
