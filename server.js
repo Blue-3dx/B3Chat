@@ -37,16 +37,16 @@ app.post('/register', (req, res) => {
   // Check if the username is Blue_3dx, if yes, admin = 1, else admin = 0
   const isAdmin = (username === 'Blue_3dx') ? 1 : 0;
 
-  // Insert user with admin flag
-  db.run(
-    INSERT INTO users(username, password, admin) VALUES(?, ?, ?),
-    [username, password, isAdmin],
-    err => {
-      if (err) return res.json({ ok: false, error: 'User exists' });
-      res.json({ ok: true });
-    }
-  );
-});
+// Insert user with admin flag
+db.run(
+  `INSERT INTO users(username, password, admin) VALUES(?, ?, ?)`,
+  [username, password, isAdmin],
+  err => {
+    if (err) return res.json({ ok: false, error: 'User exists' });
+    res.json({ ok: true });
+  }
+);
+
 
 
 app.post('/login', (req, res) => {
