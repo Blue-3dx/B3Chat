@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Manage My Account</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h2 { text-align: center; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, textarea, select {
+      width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box;
+    }
+    button {
+      padding: 10px;
+      margin-top: 15px;
+      width: 100%;
+      background-color: #28a745;
+      color: white;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+    }
+    #deleteAccount {
+      background-color: #dc3545;
+      margin-top: 10px;
+    }
+    .message {
+      margin-top: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Manage My Account</h2>
+
+  <label for="bio">Your Bio/Description</label>
+  <textarea id="bio" placeholder="Say something about yourself..."></textarea>
+
+  <label for="bgColor">Profile Background Color</label>
+  <input type="color" id="bgColor" value="#ffffff" />
+
+  <hr>
+
+  <h3>Change Password</h3>
+  <label for="currentPassword">Current Password</label>
+  <input type="password" id="currentPassword" />
+
+  <label for="newPassword">New Password</label>
+  <input type="password" id="newPassword" />
+
+  <button id="saveBtn">Save Changes</button>
+  <button id="deleteAccount">Delete My Account</button>
+
+  <div id="status" class="message"></div>
+
+  <script>
+    const username = localStorage.getItem('username');
+    if (!username) {
+      alert('Not logged in.');
+      window.location.href = '/';
+    }
+
+    const bioInput = document.getElementById('bio');
+    const bgColorInput = document.getElementById('bgColor');
+    const currentPassInput = document.getElementById('currentPassword');
+    const newPassInput = document.getElementById('newPassword');
+    const saveBtn = document.getElementById('saveBtn');
+    const deleteBtn = document.getElementById('deleteAccount');
+    const status = document.getElementById('status');
+
+    // Load existing profile info
+    fetch(`/profile/${username}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          bioInput.value = data.bio || '';
+          bgColorInput.value = data.bgColor || '#ffffff';
+        }
+      });
+
+    saveBtn.onclick = () => {
+      const currentPassword = currentPassInput.value;
+      const newPassword = newPassInput.value;
+      const bio = bioInput.value;
+      const bgColor = bgColorInput.value;
+
+      fetch('/update-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username, currentPassword, newPassword, bio, bgColor
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        status.style.color = data.ok ? 'green' : 'red';
+        status.textContent = data.message;
+      });
+    };
+
+    deleteBtn.onclick = () => {
+      if (!confirm('Are you sure you want to delete your account?')) return;
+      fetch('/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          alert('Account deleted.');
+          localStorage.clear();
+          window.location.href = '/';
+        } else {
+          status.style.color = 'red';
+          status.textContent = data.message;
+        }
+      });
+    };
+  </script>
+</body>
+</html>

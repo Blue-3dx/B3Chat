@@ -15,19 +15,19 @@ const path = require('path');
 const db = new sqlite3.Database(path.join(__dirname, 'data', 'users.db'), err => {
   if (err) console.error('SQLite error:', err);
   else {
-    // Create users table if not exists, then try adding 'admin' column safely
     db.run(`CREATE TABLE IF NOT EXISTS users (
       username TEXT PRIMARY KEY,
-      password TEXT NOT NULL
-    )`, () => {
-      db.run(`ALTER TABLE users ADD COLUMN admin INTEGER DEFAULT 0`, err => {
-        if (err && !err.message.includes('duplicate column')) {
-          console.error('Error adding admin column:', err);
-        } else {
-          console.log('Admin column exists or added successfully');
-        }
-      });
+      password TEXT NOT NULL,
+      admin INTEGER DEFAULT 0,
+      bio TEXT DEFAULT '',
+      bgColor TEXT DEFAULT '#ffffff'
+    )`, err => {
+      if (err) console.error('Error creating users table:', err);
+      else console.log('Users table ready');
     });
+  }
+});
+
   }
 });
 
@@ -36,9 +36,14 @@ app.post('/register', (req, res) => {
   const { username, password } = req.body;
   console.log('[REGISTER]', req.body);
   if (!username || !password) return res.json({ ok: false, error: 'Missing fields' });
+
+  // Check if the username is Blue_3dx, if yes, admin = 1, else admin = 0
+  const isAdmin = (username === 'Blue_3dx') ? 1 : 0;
+
+  // Insert user with admin flag
   db.run(
-    `INSERT INTO users(username,password) VALUES(?,?)`,
-    [username, password],
+    INSERT INTO users(username, password, admin) VALUES(?, ?, ?),
+    [username, password, isAdmin],
     err => {
       if (err) return res.json({ ok: false, error: 'User exists' });
       res.json({ ok: true });
@@ -46,11 +51,12 @@ app.post('/register', (req, res) => {
   );
 });
 
+
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   console.log('[LOGIN]', req.body);
   db.get(
-    `SELECT password, admin FROM users WHERE username = ?`,
+    SELECT password, admin FROM users WHERE username = ?,
     [username],
     (err, row) => {
       if (err || !row || row.password !== password) return res.json({ ok: false });
@@ -58,6 +64,64 @@ app.post('/login', (req, res) => {
     }
   );
 });
+// ─── Get profile info for settings.html ───
+app.get('/profile/:username', (req, res) => {
+  const { username } = req.params;
+  db.get(
+    `SELECT bio, bgColor FROM users WHERE username = ?`,
+    [username],
+    (err, row) => {
+      if (err || !row) return res.json({ ok: false, message: 'User not found' });
+      res.json({ ok: true, bio: row.bio, bgColor: row.bgColor });
+    }
+  );
+});
+// ─── Update bio, bgColor, and password ───
+app.post('/update-account', (req, res) => {
+  const { username, currentPassword, newPassword, bio, bgColor } = req.body;
+  db.get(`SELECT password FROM users WHERE username = ?`, [username], (err, row) => {
+    if (err || !row) return res.json({ ok: false, message: 'User not found' });
+
+    // Verify current password if changing password
+    if (newPassword && currentPassword !== row.password) {
+      return res.json({ ok: false, message: 'Incorrect current password' });
+    }
+
+    const updates = [];
+    const params  = [];
+    if (bio !== undefined)     { updates.push('bio = ?');     params.push(bio); }
+    if (bgColor !== undefined) { updates.push('bgColor = ?'); params.push(bgColor); }
+    if (newPassword)           { updates.push('password = ?'); params.push(newPassword); }
+
+    if (updates.length === 0) {
+      return res.json({ ok: false, message: 'No changes provided' });
+    }
+
+    params.push(username);
+    db.run(
+      `UPDATE users SET ${updates.join(', ')} WHERE username = ?`,
+      params,
+      err => {
+        if (err) res.json({ ok: false, message: 'Update failed' });
+        else     res.json({ ok: true,  message: 'Changes saved!' });
+      }
+    );
+  });
+});
+// ─── Delete logged-in user account ───
+app.post('/delete-account', (req, res) => {
+  const { username } = req.body;
+  if (username === 'Blue_3dx') {
+    return res.json({ ok: false, message: 'Cannot delete protected admin account.' });
+  }
+
+  db.run(`DELETE FROM users WHERE username = ?`, [username], err => {
+    if (err) res.json({ ok: false, message: 'Delete failed' });
+    else     res.json({ ok: true,  message: 'Account deleted' });
+  });
+});
+
+
 
 
 // ─── WebSocket Setup ───
@@ -144,7 +208,7 @@ function applyColorCodes(text) {
   let currentColor = null;
   return text.replace(/%[0-9a-f]/gi, match => {
     currentColor = codeMap[match.toLowerCase()];
-    return `<span style="color:${currentColor}">`;
+    return <span style="color:${currentColor}">;
   }) + (currentColor ? '</span>' : '');
 }
 
@@ -177,10 +241,11 @@ if (data.type === 'admin_command') {
     switch (data.type) {
 case 'set_username': 
   clientData.username = data.username;
-  db.get(`SELECT admin FROM users WHERE username = ?`, [data.username], (err, row) => {
+  db.get(SELECT admin FROM users WHERE username = ?, [data.username], (err, row) => {
     clientData.admin = (row && row.admin === 1);
   });
   break;
+
 
       case 'create_room': {
         if (!clientData.username || !data.roomName || chatRooms[data.roomName]) {
@@ -297,8 +362,8 @@ function handleCommand(ws, room, text) {
   let feedback = 'denied';
 
   switch (cmd) {
-    case 'mute': if (arg && !room.muted.has(arg)) { room.muted.add(arg); feedback = `muted ${arg}`; } break;
-    case 'unmute': if (arg && room.muted.has(arg)) { room.muted.delete(arg); feedback = `unmuted ${arg}`; } break;
+    case 'mute': if (arg && !room.muted.has(arg)) { room.muted.add(arg); feedback = muted ${arg}; } break;
+    case 'unmute': if (arg && room.muted.has(arg)) { room.muted.delete(arg); feedback = unmuted ${arg}; } break;
     case 'kick': {
       if (arg) {
         const target = [...clients.entries()].find(([sock, data]) => data.username === arg && room.users.has(sock));
@@ -306,7 +371,7 @@ function handleCommand(ws, room, text) {
           const [targetSock] = target;
           targetSock.send(JSON.stringify({ type: 'error', message: 'You have been kicked.' }));
           targetSock.close();
-          feedback = `kicked ${arg}`;
+          feedback = kicked ${arg};
         }
       }
       break;
@@ -338,7 +403,7 @@ function sendRoomListUpdate() {
 
 // Start the server
 server.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
+  console.log(Server listening on port ${port});
 });
 function handleAdminCommand(ws, commandText) {
   const clientData = clients.get(ws);
@@ -358,7 +423,7 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: ban <user>' }));
         return;
       }
-      db.run(`DELETE FROM users WHERE username = ?`, [userToBan], function(err) {
+      db.run(DELETE FROM users WHERE username = ?, [userToBan], function(err) {
         if (err) {
           ws.send(JSON.stringify({ type: 'error', message: 'Error banning user' }));
         } else {
@@ -369,7 +434,7 @@ function handleAdminCommand(ws, commandText) {
               clients.delete(clientWs);
             }
           }
-          ws.send(JSON.stringify({ type: 'message', message: `User ${userToBan} banned.` }));
+          ws.send(JSON.stringify({ type: 'message', message: User ${userToBan} banned. }));
         }
       });
       break;
@@ -381,20 +446,20 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: rename <oldname> <newname>' }));
         return;
       }
-      db.get(`SELECT username FROM users WHERE username = ?`, [newName], (err, row) => {
+      db.get(SELECT username FROM users WHERE username = ?, [newName], (err, row) => {
         if (row) {
           ws.send(JSON.stringify({ type: 'error', message: 'New username already exists.' }));
           return;
         }
-        db.run(`UPDATE users SET username = ? WHERE username = ?`, [newName, oldName], function(err) {
+        db.run(UPDATE users SET username = ? WHERE username = ?, [newName, oldName], function(err) {
           if (err) {
             ws.send(JSON.stringify({ type: 'error', message: 'Rename failed.' }));
           } else {
-            ws.send(JSON.stringify({ type: 'message', message: `${oldName} renamed to ${newName}` }));
+            ws.send(JSON.stringify({ type: 'message', message: ${oldName} renamed to ${newName} }));
             for (const [clientWs, data] of clients.entries()) {
               if (data.username === oldName) {
                 data.username = newName;
-                clientWs.send(JSON.stringify({ type: 'message', message: `Your username was changed to ${newName}` }));
+                clientWs.send(JSON.stringify({ type: 'message', message: Your username was changed to ${newName} }));
               }
             }
           }
@@ -408,11 +473,11 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: promote <user>' }));
         return;
       }
-      db.run(`UPDATE users SET admin = 1 WHERE username = ?`, [userToPromote], function(err) {
+      db.run(UPDATE users SET admin = 1 WHERE username = ?, [userToPromote], function(err) {
         if (err) {
           ws.send(JSON.stringify({ type: 'error', message: 'Promote failed.' }));
         } else {
-          ws.send(JSON.stringify({ type: 'message', message: `${userToPromote} promoted to admin.` }));
+          ws.send(JSON.stringify({ type: 'message', message: ${userToPromote} promoted to admin. }));
         }
       });
       break;
@@ -423,11 +488,11 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: demote <user>' }));
         return;
       }
-      db.run(`UPDATE users SET admin = 0 WHERE username = ?`, [userToDemote], function(err) {
+      db.run(UPDATE users SET admin = 0 WHERE username = ?, [userToDemote], function(err) {
         if (err) {
           ws.send(JSON.stringify({ type: 'error', message: 'Demote failed.' }));
         } else {
-          ws.send(JSON.stringify({ type: 'message', message: `${userToDemote} demoted.` }));
+          ws.send(JSON.stringify({ type: 'message', message: ${userToDemote} demoted. }));
         }
       });
       break;
@@ -439,11 +504,11 @@ function handleAdminCommand(ws, commandText) {
         ws.send(JSON.stringify({ type: 'error', message: 'Usage: password <user> <newpassword>' }));
         return;
       }
-      db.run(`UPDATE users SET password = ? WHERE username = ?`, [newPass, userToReset], function(err) {
+      db.run(UPDATE users SET password = ? WHERE username = ?, [newPass, userToReset], function(err) {
         if (err) {
           ws.send(JSON.stringify({ type: 'error', message: 'Password reset failed.' }));
         } else {
-          ws.send(JSON.stringify({ type: 'message', message: `Password for ${userToReset} changed.` }));
+          ws.send(JSON.stringify({ type: 'message', message: Password for ${userToReset} changed. }));
         }
       });
       break;
@@ -455,7 +520,7 @@ function handleAdminCommand(ws, commandText) {
         return;
       }
       Object.values(chatRooms).forEach(room => room.muted.add(userToMute));
-      ws.send(JSON.stringify({ type: 'message', message: `${userToMute} muted globally.` }));
+      ws.send(JSON.stringify({ type: 'message', message: ${userToMute} muted globally. }));
       break;
     }
     case 'unmute': {
@@ -465,7 +530,7 @@ function handleAdminCommand(ws, commandText) {
         return;
       }
       Object.values(chatRooms).forEach(room => room.muted.delete(userToUnmute));
-      ws.send(JSON.stringify({ type: 'message', message: `${userToUnmute} unmuted globally.` }));
+      ws.send(JSON.stringify({ type: 'message', message: ${userToUnmute} unmuted globally. }));
       break;
     }
     case 'kick': {
@@ -479,7 +544,7 @@ function handleAdminCommand(ws, commandText) {
           clientWs.send(JSON.stringify({ type: 'error', message: 'You have been kicked.' }));
           clientWs.close();
           clients.delete(clientWs);
-          ws.send(JSON.stringify({ type: 'message', message: `${userToKick} kicked.` }));
+          ws.send(JSON.stringify({ type: 'message', message: ${userToKick} kicked. }));
           return;
         }
       }
@@ -498,12 +563,12 @@ function handleAdminCommand(ws, commandText) {
         return;
       }
       room.messages = [];
-      ws.send(JSON.stringify({ type: 'message', message: `Messages cleared in ${roomName}` }));
+      ws.send(JSON.stringify({ type: 'message', message: Messages cleared in ${roomName} }));
       break;
     }
     case 'rooms': {
-      const list = Object.entries(chatRooms).map(([name, room]) => `${name} (${room.users.size} users)`).join(', ');
-      ws.send(JSON.stringify({ type: 'message', message: `Active rooms: ${list}` }));
+      const list = Object.entries(chatRooms).map(([name, room]) => ${name} (${room.users.size} users)).join(', ');
+      ws.send(JSON.stringify({ type: 'message', message: Active rooms: ${list} }));
       break;
     }
     case 'broadcast': {

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About B3Chat</title>
+  <style>
+    :root {
+      --bg-color: #2c2f33;
+      --card-color: #23272a;
+      --accent: #7289da;
+      --text-light: #ffffff;
+      --text-muted: #b9bbbe;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-light);
+    }
+
+    header {
+      text-align: center;
+      padding: 40px 20px 10px;
+      background-color: var(--card-color);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 3em;
+      color: var(--accent);
+    }
+
+    header p {
+      font-size: 1.2em;
+      color: var(--text-muted);
+    }
+
+    main {
+      max-width: 900px;
+      margin: 30px auto;
+      background-color: var(--card-color);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+    }
+
+    section {
+      margin-bottom: 30px;
+    }
+
+    section h2 {
+      color: var(--accent);
+      margin-bottom: 10px;
+      font-size: 1.4em;
+    }
+
+    section p {
+      line-height: 1.6;
+      font-size: 1.05em;
+      color: var(--text-muted);
+    }
+
+    .feature-list {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .feature-list li {
+      margin: 10px 0;
+      padding-left: 20px;
+      position: relative;
+      color: var(--text-light);
+    }
+
+    .feature-list li::before {
+      content: "✔";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+    }
+
+    footer {
+      text-align: center;
+      margin: 40px 0 20px;
+      font-size: 0.9em;
+      color: var(--text-muted);
+    }
+
+    @media screen and (max-width: 600px) {
+      header h1 {
+        font-size: 2em;
+      }
+
+      main {
+        margin: 20px;
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Welcome to B3Chat</h1>
+    <p>A secure, room-based messaging experience</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>📌 What is B3Chat?</h2>
+      <p>
+        B3Chat is a lightweight, chatroom-based messaging system built with simplicity, speed, and privacy in mind. No frills — just clean chat.
+      </p>
+    </section>
+
+    <section>
+      <h2>💡 Current Features</h2>
+      <ul class="feature-list">
+        <li>Room-based messaging system</li>
+        <li>Randomized join and leave messages</li>
+        <li>Only chatroom hosts can manage their rooms</li>
+        <li>Simple interface</li>
+        <li>Account system powered by SQLite</li>
+        <li>User data is fully private and secure</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>🚧 Coming Soon</h2>
+      <ul class="feature-list">
+        <li>Global chatroom: <strong>#General</strong></li>
+        <li>Admin console for creator (Blue_3dx)</li>
+        <li>Mini profile popups with badge support</li>
+        <li>Mute and moderation tools</li>
+        <li>Persistent messages and room saving</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>🔐 Privacy & Security</h2>
+      <p>
+        Your data stays yours. No one — not even the creator — has access to private user information. B3Chat is built for secure, safe communication.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    &copy; 2025 B3Chat. Made by Blue_3dx. All rights reserved.
+  </footer>
+</body>
+</html>

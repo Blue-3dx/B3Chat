@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>User Search & Profile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    input, button { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 8px; border: 1px solid #ccc; margin-bottom: 5px; cursor: pointer; }
+    li:hover { background: #e9ecef; }
+    #profile { padding: 20px; border: 1px solid #ccc; border-radius: 8px; margin-top: 20px; }
+    #profile h3 { margin-top: 0; }
+    .badge { width: 24px; height: 24px; vertical-align: middle; margin-left: 4px; }
+  </style>
+</head>
+<body>
+
+  <h2>User Search</h2>
+  <input type="text" id="searchInput" placeholder="Search username..." />
+  <button id="searchBtn">Search</button>
+
+  <ul id="results"></ul>
+
+  <div id="profile" style="display:none;">
+    <h3 id="profName"></h3>
+    <div id="profBadges"></div>
+    <p id="profBio"></p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const selectedUser = params.get('user');
+
+    const resultsUl = document.getElementById('results');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+
+    const profileDiv = document.getElementById('profile');
+    const profName = document.getElementById('profName');
+    const profBadges = document.getElementById('profBadges');
+    const profBio = document.getElementById('profBio');
+
+    // Function to load a user profile
+    function loadProfile(username) {
+      fetch(`/profile/${username}`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok) {
+            alert('User not found');
+            return;
+          }
+          // Set background color
+          document.body.style.backgroundColor = data.bgColor;
+          profName.textContent = username;
+          profBadges.innerHTML = data.admin
+            ? '<img src="/data/Staff.png" class="badge" title="Staff" />'
+            : '';
+          profBio.textContent = data.bio;
+          profileDiv.style.display = 'block';
+        });
+    }
+
+    // Function to perform search
+    function doSearch() {
+      const q = searchInput.value.trim();
+      fetch(`/search-users?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+          resultsUl.innerHTML = '';
+          data.users.forEach(u => {
+            const li = document.createElement('li');
+            li.textContent = u.username;
+            if (u.admin) {
+              li.innerHTML += '<img src="/data/Staff.png" class="badge" title="Staff" />';
+            }
+            li.onclick = () => {
+              // Update URL and load profile
+              window.history.replaceState(null, '', `?user=${u.username}`);
+              loadProfile(u.username);
+            };
+            resultsUl.appendChild(li);
+          });
+        });
+    }
+
+    searchBtn.onclick = doSearch;
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // If a user param is present, load their profile immediately
+    if (selectedUser) {
+      searchInput.value = selectedUser;
+      doSearch();
+      loadProfile(selectedUser);
+    }
+  </script>
+</body>
+</html>
